@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class ItemManager : MonoBehaviour
 {
@@ -172,5 +173,71 @@ public class ItemManager : MonoBehaviour
     public void UseAdrenaline()
     {
         Debug.Log("Cướp item (chưa làm inventory bot)");
+    }
+
+    public IEnumerator BotSmartUse()
+    {
+        ItemSlot magnifier = null;
+        ItemSlot saw = null;
+        ItemSlot medicine = null;
+        ItemSlot inverter = null;
+
+        foreach (Transform slot in enemySlots)
+        {
+            if (slot.childCount == 0) continue;
+
+            ItemSlot item = slot.GetChild(0).GetComponent<ItemSlot>();
+
+            if (item == null) continue;
+
+            if (item.itemID == 0) magnifier = item;
+            if (item.itemID == 1) saw = item;
+            if (item.itemID == 7) medicine = item;
+            if (item.itemID == 6) inverter = item;
+        }
+
+        // máu thấp → dùng thuốc
+        if (gun.enemyHP <= 2 && medicine != null)
+        {
+            Debug.Log("Bot dùng thuốc");
+
+            UseItem(medicine.itemID);
+            Destroy(medicine.gameObject);
+
+            yield return new WaitForSeconds(1f);
+        }
+
+        // dùng kính lúp
+        if (magnifier != null)
+        {
+            Debug.Log("Bot dùng kính lúp");
+
+            UseItem(magnifier.itemID);
+            Destroy(magnifier.gameObject);
+
+            yield return new WaitForSeconds(1f);
+        }
+
+        // nếu đạn rỗng → đảo đạn
+        if (gun.bullets.Count > 0 && gun.bullets[0] == false && inverter != null)
+        {
+            Debug.Log("Bot dùng inverter");
+
+            UseItem(inverter.itemID);
+            Destroy(inverter.gameObject);
+
+            yield return new WaitForSeconds(1f);
+        }
+
+        // nếu đạn thật → dùng cưa
+        if (gun.bullets.Count > 0 && gun.bullets[0] == true && saw != null)
+        {
+            Debug.Log("Bot dùng cưa");
+
+            UseItem(saw.itemID);
+            Destroy(saw.gameObject);
+
+            yield return new WaitForSeconds(1f);
+        }
     }
 }
