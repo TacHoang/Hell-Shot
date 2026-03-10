@@ -230,9 +230,25 @@ public class GunManager : MonoBehaviour
 
         if (playerTurn || isChangingRound) yield break;
 
-        bool shootSelf = Random.value < 0.5f;
+        // dùng item trước
+        yield return StartCoroutine(itemManager.BotSmartUse());
 
-        Shoot(shootSelf);
+        yield return new WaitForSeconds(1f);
+
+        if (bullets.Count == 0) yield break;
+
+        bool bullet = bullets[0];
+
+        if (bullet)
+        {
+            Debug.Log("Bot biết đạn thật → bắn player");
+            Shoot(false);
+        }
+        else
+        {
+            Debug.Log("Bot biết đạn rỗng → bắn mình");
+            Shoot(true);
+        }
     }
 
     IEnumerator StartNextRound()
