@@ -927,6 +927,21 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!115 &184369873
+MonoScript:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  serializedVersion: 7
+  m_DefaultReferences: {}
+  m_Icon: {fileID: 0}
+  m_Type: 0
+  m_ExecutionOrder: 0
+  m_ClassName: NetworkEvents
+  m_Namespace: Fusion
+  m_AssemblyName: Fusion.Runtime
 --- !u!1 &235472836
 GameObject:
   m_ObjectHideFlags: 0
@@ -3904,6 +3919,80 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1175585284 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2252859363002212871, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
+  m_PrefabInstance: {fileID: 1629424976}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1175585289
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1175585284}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 184369873}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  OnInput:
+    m_PersistentCalls:
+      m_Calls: []
+  OnInputMissing:
+    m_PersistentCalls:
+      m_Calls: []
+  OnConnectedToServer:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDisconnectedFromServer:
+    m_PersistentCalls:
+      m_Calls: []
+  OnConnectRequest:
+    m_PersistentCalls:
+      m_Calls: []
+  OnConnectFailed:
+    m_PersistentCalls:
+      m_Calls: []
+  PlayerJoined:
+    m_PersistentCalls:
+      m_Calls: []
+  PlayerLeft:
+    m_PersistentCalls:
+      m_Calls: []
+  OnSimulationMessage:
+    m_PersistentCalls:
+      m_Calls: []
+  OnShutdown:
+    m_PersistentCalls:
+      m_Calls: []
+  OnSessionListUpdate:
+    m_PersistentCalls:
+      m_Calls: []
+  OnCustomAuthenticationResponse:
+    m_PersistentCalls:
+      m_Calls: []
+  OnHostMigration:
+    m_PersistentCalls:
+      m_Calls: []
+  OnSceneLoadDone:
+    m_PersistentCalls:
+      m_Calls: []
+  OnSceneLoadStart:
+    m_PersistentCalls:
+      m_Calls: []
+  OnReliableData:
+    m_PersistentCalls:
+      m_Calls: []
+  OnReliableProgress:
+    m_PersistentCalls:
+      m_Calls: []
+  OnObjectEnterAOI:
+    m_PersistentCalls:
+      m_Calls: []
+  OnObjectExitAOI:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1186224738
 GameObject:
   m_ObjectHideFlags: 0
@@ -4276,6 +4365,8 @@ MonoBehaviour:
   runnerPrefab: {fileID: 4654413145532585955, guid: 0157b7d98d84e2447af2aec816fef5b5, type: 3}
   lobbyScene:
     RawValue: 2
+  roomPlayerPrefab:
+    RawGuidValue: 0696ffaddd8bde446826041c4a46a832
 --- !u!1 &1248525585
 GameObject:
   m_ObjectHideFlags: 0
@@ -5073,15 +5164,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7343830577118766420, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.526963
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7343830577118766420, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.28711233
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 7343830577118766420, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.01794561
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7343830577118766420, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
       propertyPath: m_LocalRotation.w
@@ -5114,7 +5205,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2252859363002212871, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1175585289}
   m_SourcePrefab: {fileID: 100100000, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
 --- !u!1 &1634240518
 GameObject:

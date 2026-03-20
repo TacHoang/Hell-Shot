@@ -1,21 +1,20 @@
 using Fusion;
 using UnityEngine;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 
 public class NetworkManager : MonoBehaviour
 {
-    [Header("UI Panels")]
     public GameObject mainMenuPanel;
     public GameObject joinRoomPanel;
     public TMP_InputField joinRoomInput;
 
-    [Header("Fusion Setup")]
     public NetworkRunner runnerPrefab;
     private NetworkRunner runner;
 
-    [Header("Scenes")]
     public SceneRef lobbyScene;
+    public NetworkPrefabRef roomPlayerPrefab;
 
     public async void StartGame(GameMode mode, string sessionID)
     {
@@ -36,16 +35,52 @@ public class NetworkManager : MonoBehaviour
             GameMode = mode,
             SessionName = sessionID,
             SessionProperties = props,
-            Scene = lobbyScene, // 👉 QUAN TRỌNG: load lobby scene
+            Scene = lobbyScene,
             PlayerCount = 2,
             SceneManager = runner.gameObject.AddComponent<NetworkSceneManagerDefault>()
         });
 
-        // Ẩn menu cũ
         mainMenuPanel.SetActive(false);
         joinRoomPanel.SetActive(false);
 
         Debug.Log($"{mode} started. RoomID: {sessionID}");
+
+        // 🔥 FIX: kiểm tra spawn liên tục
+        InvokeRepeating(nameof(CheckSpawnPlayers), 1f, 1f);
+    }
+
+    void CheckSpawnPlayers()
+    {
+        if (runner == null || !runner.IsServer) return;
+
+        foreach (var player in runner.ActivePlayers)
+        {
+            bool hasPlayer = false;
+
+            foreach (var obj in FindObjectsOfType<RoomPlayer>())
+            {
+                if (obj.Object != null && obj.Object.InputAuthority == player)
+                {
+                    hasPlayer = true;
+                    break;
+                }
+            }
+
+            if (!hasPlayer)
+            {
+                Debug.Log("Spawn player: " + player);
+
+                runner.Spawn(
+                    roomPlayerPrefab,
+                    Vector3.zero,
+                    Quaternion.identity,
+                    player
+                );
+            }
+        }
+
+        // 🔥 THÊM DÒNG NÀY
+        RemoveDisconnectedPlayers();
     }
 
     public void OnClickCreate()
@@ -70,9 +105,68 @@ public class NetworkManager : MonoBehaviour
     {
         string id = joinRoomInput.text.Trim();
 
-        if (!string.IsNullOrEmpty(id))
-            StartGame(GameMode.Client, id);
-        else
+        if (string.IsNullOrEmpty(id))
+        {
             Debug.LogWarning("Nhập ID phòng!");
+            return;
+        }
+
+        // Start client
+        StartGame(GameMode.Client, id);
+
+        // 🔥 Thêm callback kiểm tra join thành công
+        StartCoroutine(CheckJoinSuccess());
+    }
+
+IEnumerator CheckJoinSuccess()
+{
+    float timeout = 3f; // chờ 5s nếu không join được
+    float timer = 0f;
+
+    while (runner == null || !runner.SessionInfo.IsValid)
+    {
+        timer += Time.deltaTime;
+        if (timer >= timeout)
+        {
+            Debug.LogWarning("Không thể join phòng! Quay về menu...");
+
+            // 🔹 Chỉ tắt joinRoomPanel và bật mainMenuPanel
+            if (joinRoomPanel != null) joinRoomPanel.SetActive(false);
+            if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
+
+            yield break;
+        }
+        yield return null;
+    }
+}
+
+    void RemoveDisconnectedPlayers()
+    {
+        if (runner == null || !runner.IsServer) return;
+
+        var activePlayers = runner.ActivePlayers;
+
+        foreach (var obj in FindObjectsOfType<RoomPlayer>())
+        {
+            if (obj.Object == null) continue;
+
+            bool stillInGame = false;
+
+            foreach (var player in activePlayers)
+            {
+                if (obj.Object.InputAuthority == player)
+                {
+                    stillInGame = true;
+                    break;
+                }
+            }
+
+            // ❌ nếu player không còn trong room → xóa
+            if (!stillInGame)
+            {
+                Debug.Log("Despawn player: " + obj.Object.InputAuthority);
+                runner.Despawn(obj.Object);
+            }
+        }
     }
 }

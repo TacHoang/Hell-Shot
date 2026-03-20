@@ -1,6 +1,9 @@
 using UnityEngine;
 using TMPro;
 using Fusion;
+using System.Collections;
+using UnityEngine.SceneManagement;
+using System.Linq;
 
 public class RoomUI : MonoBehaviour
 {
@@ -16,6 +19,7 @@ public class RoomUI : MonoBehaviour
     public SceneRef gameplayScene;
 
     private NetworkRunner runner;
+    private bool hasLeft = false; // 👈 chống load nhiều lần
 
     void Awake()
     {
@@ -26,33 +30,72 @@ public class RoomUI : MonoBehaviour
     {
         runner = FindFirstObjectByType<NetworkRunner>();
 
-        if (runner != null)
+        if (runner != null && runner.SessionInfo.IsValid)
         {
             roomIDText.text = "ID: " + runner.SessionInfo.Name;
             startGameButton.SetActive(runner.IsServer);
 
-            if (runner.IsServer)
+            if (runner.SessionInfo.Properties.TryGetValue("HostName", out var hostName))
             {
-                roomNameText.text = "Phòng của: " + PlayerInfo.Instance.PlayerName;
+                roomNameText.text = "Phòng của: " + hostName;
+            }
+            else
+            {
+                roomNameText.text = "Phòng đang tải...";
             }
         }
 
-        // update UI liên tục tránh miss sync
         InvokeRepeating(nameof(RefreshPlayers), 0.5f, 1f);
+    }
+
+    void Update()
+    {
+        if (runner == null || hasLeft) return;
+
+        // 👉 CLIENT tự detect host thoát
+        if (!runner.IsServer)
+        {
+            if (runner.ActivePlayers.Count() <= 1)
+            {
+                hasLeft = true;
+                Debug.Log("Host đã thoát → quay về menu");
+                SceneManager.LoadScene(0);
+            }
+        }
     }
 
     public void RefreshPlayers()
     {
         var players = FindObjectsOfType<RoomPlayer>();
 
+        // 🔥 FIX NULL CRASH
+        players = System.Array.FindAll(players, p =>
+            p != null &&
+            p.Object != null &&
+            p.Object.InputAuthority != null
+        );
+
+        if (players.Length > 1)
+        {
+            System.Array.Sort(players, (a, b) =>
+                a.Object.InputAuthority.RawEncoded.CompareTo(b.Object.InputAuthority.RawEncoded)
+            );
+        }
+
         playerSlot1.text = "";
         playerSlot2.text = "";
 
         if (players.Length > 0)
-            playerSlot1.text = players[0].PlayerName.ToString();
+        {
+            string name = players[0].PlayerName.ToString();
+            playerSlot1.text = string.IsNullOrEmpty(name) ? "..." : name;
+        }
 
         if (players.Length > 1)
-            playerSlot2.text = players[1].PlayerName.ToString();
+        {
+            string name = players[1].PlayerName.ToString();
+            playerSlot2.text = string.IsNullOrEmpty(name) ? "..." : name;
+        }
     }
 
     public void OnClickStartGame()
@@ -63,12 +106,47 @@ public class RoomUI : MonoBehaviour
         }
     }
 
+    // ================== LEAVE ==================
+
     public void OnClickLeave()
     {
-        if (runner != null)
+        if (!hasLeft)
         {
-            runner.Shutdown();
-            UnityEngine.SceneManagement.SceneManager.LoadScene(0);
+            hasLeft = true;
+            StartCoroutine(FullResetGame());
         }
+    }
+
+    IEnumerator FullResetGame()
+    {
+        CancelInvoke();
+
+        var runners = FindObjectsOfType<NetworkRunner>();
+
+        foreach (var r in runners)
+        {
+            if (r != null && r.IsRunning)
+            {
+                Debug.Log("Shutdown runner: " + r.name);
+                r.Shutdown(true); // 👈 force leave
+            }
+        }
+
+        yield return new WaitForSeconds(1.5f);
+
+        foreach (var r in runners)
+        {
+            if (r != null)
+                Destroy(r.gameObject);
+        }
+
+        if (PlayerInfo.Instance != null)
+            PlayerInfo.Instance.PlayerName = "";
+
+        RoomUI.Instance = null;
+
+        Debug.Log("RESET COMPLETE → Load lại game");
+
+        SceneManager.LoadScene(0, LoadSceneMode.Single);
     }
 }

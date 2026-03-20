@@ -10,10 +10,18 @@ public class RoomPlayer : NetworkBehaviour
     {
         if (HasInputAuthority)
         {
-            PlayerName = PlayerInfo.Instance.PlayerName;
+            // 👇 Gửi tên lên server để sync
+            RPC_SetName(PlayerInfo.Instance.PlayerName);
         }
 
-        Invoke(nameof(UpdateUI), 0.2f);
+        Invoke(nameof(UpdateUI), 0.3f);
+    }
+
+    // 👇 RPC: client gửi → server set
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    void RPC_SetName(string name)
+    {
+        PlayerName = name;
     }
 
     void UpdateUI()
@@ -26,9 +34,6 @@ public class RoomPlayer : NetworkBehaviour
 
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
-        if (RoomUI.Instance != null)
-        {
-            RoomUI.Instance.RefreshPlayers();
-        }
+        // Không làm gì
     }
 }
