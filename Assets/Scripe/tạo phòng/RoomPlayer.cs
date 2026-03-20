@@ -3,37 +3,37 @@ using UnityEngine;
 
 public class RoomPlayer : NetworkBehaviour
 {
-    [Networked, OnChangedRender(nameof(OnNameChanged))]
+    [Networked]
     public NetworkString<_32> PlayerName { get; set; }
 
     public override void Spawned()
     {
         if (HasInputAuthority)
         {
-            RPC_SetPlayerName(PlayerInfo.Instance.PlayerName);
+            // 👇 Gửi tên lên server để sync
+            RPC_SetName(PlayerInfo.Instance.PlayerName);
         }
+
+        Invoke(nameof(UpdateUI), 0.3f);
     }
 
+    // 👇 RPC: client gửi → server set
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
-    public void RPC_SetPlayerName(NetworkString<_32> name)
+    void RPC_SetName(string name)
     {
         PlayerName = name;
     }
 
-    public void OnNameChanged()
+    void UpdateUI()
     {
-        string newName = PlayerName.ToString();
-        if (RoomUI.Instance != null && !string.IsNullOrEmpty(newName))
+        if (RoomUI.Instance != null)
         {
-            RoomUI.Instance.AddPlayer(newName);
+            RoomUI.Instance.RefreshPlayers();
         }
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
-        if (RoomUI.Instance != null && PlayerName.Length > 0)
-        {
-            RoomUI.Instance.RemovePlayer(PlayerName.ToString());
-        }
+        // Không làm gì
     }
 }
