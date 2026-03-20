@@ -1071,6 +1071,7 @@ GameObject:
   - component: {fileID: 905192249}
   - component: {fileID: 905192248}
   - component: {fileID: 905192247}
+  - component: {fileID: 905192251}
   m_Layer: 5
   m_Name: StartGameButton
   m_TagString: Untagged
@@ -1192,6 +1193,22 @@ RectTransform:
   m_AnchoredPosition: {x: 1220, y: -400}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &905192251
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 905192246}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73b6396cf567b3d47b78d2b3c144d7c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  label: {fileID: 1106369803}
+  scaleAmount: 1.1
+  duration: 0.4
+  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
 --- !u!1 &1002836093
 GameObject:
   m_ObjectHideFlags: 0
@@ -1903,6 +1920,7 @@ GameObject:
   - component: {fileID: 1692345829}
   - component: {fileID: 1692345828}
   - component: {fileID: 1692345827}
+  - component: {fileID: 1692345830}
   m_Layer: 5
   m_Name: LeaveButton
   m_TagString: Untagged
@@ -2024,6 +2042,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1692345825}
   m_CullTransparentMesh: 1
+--- !u!114 &1692345830
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1692345825}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73b6396cf567b3d47b78d2b3c144d7c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  label: {fileID: 591048672}
+  scaleAmount: 1.1
+  duration: 0.4
+  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
 --- !u!1 &1736860589
 GameObject:
   m_ObjectHideFlags: 0
