@@ -4272,11 +4272,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mainMenuPanel: {fileID: 473496854}
   joinRoomPanel: {fileID: 861440271}
-  lobbyCanvas: {fileID: 1533737542}
   joinRoomInput: {fileID: 583555067}
   runnerPrefab: {fileID: 4654413145532585955, guid: 0157b7d98d84e2447af2aec816fef5b5, type: 3}
   lobbyScene:
-    RawValue: 1
+    RawValue: 2
 --- !u!1 &1248525585
 GameObject:
   m_ObjectHideFlags: 0

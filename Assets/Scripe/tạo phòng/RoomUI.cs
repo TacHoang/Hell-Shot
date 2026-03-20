@@ -6,73 +6,69 @@ public class RoomUI : MonoBehaviour
 {
     public static RoomUI Instance;
 
-    [Header("UI Elements")]
     public TextMeshProUGUI roomIDText;
     public TextMeshProUGUI roomNameText;
     public GameObject startGameButton;
 
-    [Header("Player Slots (max 2)")]
-    public TextMeshProUGUI playerSlot1; // Host
-    public TextMeshProUGUI playerSlot2; // Client
+    public TextMeshProUGUI playerSlot1;
+    public TextMeshProUGUI playerSlot2;
 
-    [Header("Gameplay Scene")]
-    public SceneRef gameplayScene; // SceneRef gameplay
+    public SceneRef gameplayScene;
 
-    private NetworkRunner _runner;
+    private NetworkRunner runner;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+    }
 
     void Start()
     {
-        _runner = FindFirstObjectByType<NetworkRunner>();
+        runner = FindFirstObjectByType<NetworkRunner>();
 
-        if (_runner != null && _runner.SessionInfo.IsValid)
+        if (runner != null)
         {
-            // Hiển thị RoomID + Host Name
-            roomIDText.text = "ID: " + _runner.SessionInfo.Name;
+            roomIDText.text = "ID: " + runner.SessionInfo.Name;
+            startGameButton.SetActive(runner.IsServer);
 
-            if (_runner.SessionInfo.Properties.TryGetValue("HostName", out var host))
+            if (runner.IsServer)
             {
-                roomNameText.text = "Phòng của: " + host;
-                playerSlot1.text = host.ToString(); // Host = playerSlot1
+                roomNameText.text = "Phòng của: " + PlayerInfo.Instance.PlayerName;
             }
-            else
-            {
-                roomNameText.text = "Phòng: Đang tải...";
-                playerSlot1.text = "";
-            }
-
-            if (startGameButton != null)
-                startGameButton.SetActive(_runner.IsServer);
         }
+
+        // update UI liên tục tránh miss sync
+        InvokeRepeating(nameof(RefreshPlayers), 0.5f, 1f);
     }
 
-    public void AddPlayer(string playerName)
+    public void RefreshPlayers()
     {
-        if (playerName == playerSlot1.text) return; // tránh trùng với host
-        if (playerSlot2.text == "") playerSlot2.text = playerName;
-        else Debug.LogWarning("Hết slot người chơi!");
-    }
+        var players = FindObjectsOfType<RoomPlayer>();
 
-    public void RemovePlayer(string playerName)
-    {
-        if (playerSlot2.text == playerName) playerSlot2.text = "";
+        playerSlot1.text = "";
+        playerSlot2.text = "";
+
+        if (players.Length > 0)
+            playerSlot1.text = players[0].PlayerName.ToString();
+
+        if (players.Length > 1)
+            playerSlot2.text = players[1].PlayerName.ToString();
     }
 
     public void OnClickStartGame()
     {
-        if (_runner != null && _runner.IsServer)
+        if (runner != null && runner.IsServer)
         {
-            _runner.LoadScene(gameplayScene); // load gameplay
+            runner.LoadScene(gameplayScene);
         }
     }
 
     public void OnClickLeave()
     {
-        if (_runner != null)
+        if (runner != null)
         {
-            _runner.Shutdown();
-            UnityEngine.SceneManagement.SceneManager.LoadScene(0); // về menu
+            runner.Shutdown();
+            UnityEngine.SceneManagement.SceneManager.LoadScene(0);
         }
     }
 }

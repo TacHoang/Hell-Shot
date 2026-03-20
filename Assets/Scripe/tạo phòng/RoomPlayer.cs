@@ -3,37 +3,32 @@ using UnityEngine;
 
 public class RoomPlayer : NetworkBehaviour
 {
-    [Networked, OnChangedRender(nameof(OnNameChanged))]
+    [Networked]
     public NetworkString<_32> PlayerName { get; set; }
 
     public override void Spawned()
     {
         if (HasInputAuthority)
         {
-            RPC_SetPlayerName(PlayerInfo.Instance.PlayerName);
+            PlayerName = PlayerInfo.Instance.PlayerName;
         }
+
+        Invoke(nameof(UpdateUI), 0.2f);
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
-    public void RPC_SetPlayerName(NetworkString<_32> name)
+    void UpdateUI()
     {
-        PlayerName = name;
-    }
-
-    public void OnNameChanged()
-    {
-        string newName = PlayerName.ToString();
-        if (RoomUI.Instance != null && !string.IsNullOrEmpty(newName))
+        if (RoomUI.Instance != null)
         {
-            RoomUI.Instance.AddPlayer(newName);
+            RoomUI.Instance.RefreshPlayers();
         }
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
-        if (RoomUI.Instance != null && PlayerName.Length > 0)
+        if (RoomUI.Instance != null)
         {
-            RoomUI.Instance.RemovePlayer(PlayerName.ToString());
+            RoomUI.Instance.RefreshPlayers();
         }
     }
 }
