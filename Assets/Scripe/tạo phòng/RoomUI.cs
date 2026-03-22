@@ -117,36 +117,39 @@ public class RoomUI : MonoBehaviour
         }
     }
 
-    IEnumerator FullResetGame()
+    public IEnumerator FullResetGame()
     {
-        CancelInvoke();
-
+        // 1. Tắt tất cả NetworkRunner đang chạy
         var runners = FindObjectsOfType<NetworkRunner>();
-
         foreach (var r in runners)
         {
             if (r != null && r.IsRunning)
-            {
-                Debug.Log("Shutdown runner: " + r.name);
-                r.Shutdown(true); // 👈 force leave
-            }
+                r.Shutdown(true); // force client/server leave
         }
 
-        yield return new WaitForSeconds(1.5f);
+        // 2. Chờ một lúc để Fusion xử lý xong shutdown
+        yield return new WaitForSeconds(1f);
 
+        // 3. Xóa hết runner cũ
         foreach (var r in runners)
         {
             if (r != null)
                 Destroy(r.gameObject);
         }
 
+        // 4. Reset tất cả singleton và biến static
         if (PlayerInfo.Instance != null)
+        {
             PlayerInfo.Instance.PlayerName = "";
+            PlayerInfo.Instance = null; // reset hoàn toàn
+        }
 
         RoomUI.Instance = null;
 
-        Debug.Log("RESET COMPLETE → Load lại game");
+        // Nếu bạn có callback holder riêng, reset luôn
+        // NetworkRunnerCallbacksHolder.Instance = null;
 
+        // 5. Load lại scene đầu tiên → tất cả Awake/Start sẽ chạy lại
         SceneManager.LoadScene(0, LoadSceneMode.Single);
     }
 }

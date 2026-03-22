@@ -120,24 +120,27 @@ public class NetworkManager : MonoBehaviour
 
 IEnumerator CheckJoinSuccess()
 {
-    float timeout = 3f; // chờ 5s nếu không join được
+    float timeout = 10f; // 🔥 tăng lên
     float timer = 0f;
 
-    while (runner == null || !runner.SessionInfo.IsValid)
+    while (runner == null || !runner.IsRunning)
     {
         timer += Time.deltaTime;
+
         if (timer >= timeout)
         {
             Debug.LogWarning("Không thể join phòng! Quay về menu...");
 
-            // 🔹 Chỉ tắt joinRoomPanel và bật mainMenuPanel
             if (joinRoomPanel != null) joinRoomPanel.SetActive(false);
             if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
 
             yield break;
         }
+
         yield return null;
     }
+
+    Debug.Log("✅ Join thành công!");
 }
 
     void RemoveDisconnectedPlayers()
