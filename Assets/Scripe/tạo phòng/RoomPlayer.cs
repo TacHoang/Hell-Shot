@@ -6,22 +6,31 @@ public class RoomPlayer : NetworkBehaviour
     [Networked]
     public NetworkString<_32> PlayerName { get; set; }
 
+    [Networked]
+    public int CharacterIndex { get; set; } = -1; // 🔥 fix
+
     public override void Spawned()
     {
         if (HasInputAuthority)
         {
-            // 👇 Gửi tên lên server để sync
+            // gửi dữ liệu lên server
             RPC_SetName(PlayerInfo.Instance.PlayerName);
+            RPC_SetCharacter(CharacterSelection.Instance.characterIndex);
         }
 
         Invoke(nameof(UpdateUI), 0.3f);
     }
 
-    // 👇 RPC: client gửi → server set
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     void RPC_SetName(string name)
     {
         PlayerName = name;
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    void RPC_SetCharacter(int index)
+    {
+        CharacterIndex = index;
     }
 
     void UpdateUI()
@@ -34,6 +43,5 @@ public class RoomPlayer : NetworkBehaviour
 
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
-        // Không làm gì
     }
 }

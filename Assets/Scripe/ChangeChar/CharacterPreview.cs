@@ -7,6 +7,13 @@ public class CharacterPreview : MonoBehaviour
 
     private GameObject currentCharacter;
 
+    void Start()
+    {
+        int index = CharacterSelection.Instance.characterIndex;
+
+        ShowCharacter(index);
+    }
+
     public void ShowCharacter(int index)
     {
         // Xoá nhân vật cũ

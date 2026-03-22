@@ -5196,6 +5196,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetWorkRunner
       objectReference: {fileID: 0}
+    - target: {fileID: 2252859363002212871, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7343830577118766420, guid: 0e44888a8a2cf4842a3240a806dcbdcd, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
