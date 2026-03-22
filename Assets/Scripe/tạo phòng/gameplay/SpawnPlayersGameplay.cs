@@ -3,6 +3,7 @@ using Fusion;
 using System.Collections;
 using UnityEngine.SceneManagement;
 using System.Linq;
+using System.Collections.Generic;
 
 public class SpawnPlayersGameplay : MonoBehaviour
 {
@@ -16,32 +17,20 @@ public class SpawnPlayersGameplay : MonoBehaviour
 
     bool hasSpawned = false;
 
-void Start()
-{
-    if (runner == null)
+    void Start()
     {
-        runner = FindObjectOfType<NetworkRunner>();
+        if (runner == null)
+            runner = FindObjectOfType<NetworkRunner>();
+
+        StartCoroutine(SpawnPlayers());
     }
 
-    // 🔥 AUTO FIND spawn
-    if (spawnLeft == null)
-        spawnLeft = GameObject.Find("SpawnLeft")?.transform;
-
-    if (spawnRight == null)
-        spawnRight = GameObject.Find("SpawnRight")?.transform;
-
-    Debug.Log("Left: " + (spawnLeft != null ? spawnLeft.position.ToString() : "NULL"));
-Debug.Log("Right: " + (spawnRight != null ? spawnRight.position.ToString() : "NULL"));
-
-    StartCoroutine(SpawnGameplayAfterLoad());
-}
-
-    IEnumerator SpawnGameplayAfterLoad()
+    IEnumerator SpawnPlayers()
     {
         if (hasSpawned) yield break;
         hasSpawned = true;
 
-        // ⏳ đợi runner + server
+        // ⏳ đợi server
         while (runner == null || !runner.IsServer)
             yield return null;
 
@@ -49,25 +38,18 @@ Debug.Log("Right: " + (spawnRight != null ? spawnRight.position.ToString() : "NU
         while (SceneManager.GetActiveScene().name != gameplaySceneName)
             yield return null;
 
-        yield return new WaitForSeconds(0.5f);
-
-        // ⏳ đợi đủ 2 player thật
+        // ⏳ đợi đủ 2 player
         while (runner.ActivePlayers.Count() < 2)
             yield return null;
 
-        // 🔥 LẤY PLAYER CHUẨN
-        var players = runner.ActivePlayers.ToList();
+        yield return new WaitForSeconds(0.5f);
 
-        // 🔥 SORT cho ổn định
-        players = players.OrderBy(p => p.RawEncoded).ToList();
+        // 🔥 lấy player list ổn định
+        List<PlayerRef> players = runner.ActivePlayers
+            .OrderBy(p => p.RawEncoded)
+            .ToList();
 
-        if (spawnLeft == null || spawnRight == null)
-        {
-            Debug.LogError("Chưa gán spawn point!");
-            yield break;
-        }
-
-        int firstSide = runner.Tick % 2;
+        int firstSide = Random.Range(0, 2); // random thật
 
         for (int i = 0; i < players.Count; i++)
         {
@@ -81,7 +63,7 @@ Debug.Log("Right: " + (spawnRight != null ? spawnRight.position.ToString() : "NU
                 ? Quaternion.Euler(0, 180, 0)
                 : Quaternion.identity;
 
-            // 🔥 lấy character từ RoomPlayer
+            // 🔥 tìm RoomPlayer để lấy CharacterIndex
             var rp = FindObjectsOfType<RoomPlayer>()
                 .FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == player);
 
@@ -90,7 +72,7 @@ Debug.Log("Right: " + (spawnRight != null ? spawnRight.position.ToString() : "NU
             if (charIndex < 0 || charIndex >= playerPrefabs.Length)
                 charIndex = 0;
 
-            Debug.Log($"Spawn Player {player} - Char: {charIndex} - Pos: {spawnPoint.position}");
+            Debug.Log($"Spawn {player} | Char: {charIndex} | Pos: {spawnPoint.position}");
 
             runner.Spawn(
                 playerPrefabs[charIndex],
