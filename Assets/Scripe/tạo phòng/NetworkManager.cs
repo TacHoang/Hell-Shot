@@ -13,8 +13,9 @@ public class NetworkManager : MonoBehaviour
     public NetworkRunner runnerPrefab;
     private NetworkRunner runner;
 
-    public SceneRef lobbyScene;
+    //public SceneRef lobbyScene;
     public NetworkPrefabRef roomPlayerPrefab;
+    public GameObject lobbyCanvas;
 
     public async void StartGame(GameMode mode, string sessionID)
     {
@@ -30,22 +31,26 @@ public class NetworkManager : MonoBehaviour
         if (mode == GameMode.Host)
             props["HostName"] = PlayerInfo.Instance.PlayerName;
 
+        // 🔥 Bỏ scene, giữ canvas trong cùng scene
         await runner.StartGame(new StartGameArgs()
         {
             GameMode = mode,
             SessionName = sessionID,
             SessionProperties = props,
-            Scene = lobbyScene,
             PlayerCount = 2,
-            SceneManager = runner.gameObject.AddComponent<NetworkSceneManagerDefault>()
+            SceneManager = null
         });
 
+        // 🔥 Tắt menu, bật lobby canvas
         mainMenuPanel.SetActive(false);
         joinRoomPanel.SetActive(false);
 
+        if (lobbyCanvas != null)
+            lobbyCanvas.SetActive(true); // bật canvas bạn kéo vào inspector
+
         Debug.Log($"{mode} started. RoomID: {sessionID}");
 
-        // 🔥 FIX: kiểm tra spawn liên tục
+        // 🔥 kiểm tra spawn player liên tục
         InvokeRepeating(nameof(CheckSpawnPlayers), 1f, 1f);
     }
 
