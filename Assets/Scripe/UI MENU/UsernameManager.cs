@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using TMPro; // nhớ import thư viện TMP
 
 public class UsernameManager : MonoBehaviour
 {
