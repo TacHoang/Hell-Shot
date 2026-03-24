@@ -1,53 +1,73 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.EventSystems;
+using System.Collections;
 
 public class HoverEffect_RightScale : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
-    public TextMeshProUGUI label;       // Kéo Text con vào đây
-    public float scaleAmount = 1.3f;    // chữ to lên 30%
-    public float duration = 0.2f;       // thời gian animation
+    public TextMeshProUGUI label;
+    public float scaleAmount = 1.3f;
+    public float duration = 0.2f;
     public Color hoverColor = Color.yellow;
 
     private Vector3 originalScale;
     private Color originalColor;
+    private bool isInitialized = false;
 
-    void Start()
+    void Awake() 
     {
-        originalScale = label.rectTransform.localScale;
-        originalColor = label.color;
+        // Khởi tạo các giá trị gốc ngay từ đầu
+        if (!isInitialized)
+        {
+            originalScale = label.rectTransform.localScale;
+            originalColor = label.color;
+            label.rectTransform.pivot = new Vector2(0, 0.5f);
+            isInitialized = true;
+        }
+    }
 
-        // Pivot phải bên trái
-        label.rectTransform.pivot = new Vector2(0, 0.5f);
+    // CHÌA KHÓA: Khi nút biến mất (do tắt Canvas), ép nó về bình thường
+    void OnDisable()
+    {
+        StopAllCoroutines();
+        if (isInitialized && label != null)
+        {
+            label.rectTransform.localScale = originalScale;
+            label.color = originalColor;
+        }
     }
 
     public void OnPointerEnter(PointerEventData eventData)
     {
         StopAllCoroutines();
-        StartCoroutine(Animate(label, originalScale, originalScale * scaleAmount, originalColor, hoverColor));
+        StartCoroutine(Animate(label.rectTransform.localScale, originalScale * scaleAmount, label.color, hoverColor));
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
         StopAllCoroutines();
-        StartCoroutine(Animate(label, label.rectTransform.localScale, originalScale, label.color, originalColor));
+        StartCoroutine(Animate(label.rectTransform.localScale, originalScale, label.color, originalColor));
     }
 
-    System.Collections.IEnumerator Animate(TextMeshProUGUI txt, Vector3 fromScale, Vector3 toScale, Color fromColor, Color toColor)
+    IEnumerator Animate(Vector3 fromScale, Vector3 toScale, Color fromColor, Color toColor)
     {
         float t = 0;
         while (t < duration)
         {
-            t += Time.deltaTime;
+            // Dùng unscaledDeltaTime để hiệu ứng mượt kể cả khi game bị lag/pause
+            t += Time.unscaledDeltaTime; 
             float lerp = t / duration;
 
-            txt.rectTransform.localScale = Vector3.Lerp(fromScale, toScale, lerp);
-            txt.color = Color.Lerp(fromColor, toColor, lerp);
+            // Dùng SmoothStep để animation nhìn "xịn" hơn (nhanh ở giữa, chậm ở đầu/cuối)
+            float smoothLerp = Mathf.SmoothStep(0, 1, lerp);
+
+            label.rectTransform.localScale = Vector3.Lerp(fromScale, toScale, smoothLerp);
+            label.color = Color.Lerp(fromColor, toColor, smoothLerp);
 
             yield return null;
         }
 
-        txt.rectTransform.localScale = toScale;
-        txt.color = toColor;
+        label.rectTransform.localScale = toScale;
+        label.color = toColor;
     }
 }

@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class ItemSlot : MonoBehaviour
 {
-    public ItemManager itemManager;
+   // public ItemManager itemManager;
     public int itemID;
 
     public bool isPlayerItem;
@@ -13,7 +13,7 @@ public class ItemSlot : MonoBehaviour
 
         Debug.Log("Click item");
 
-        itemManager.UseItem(itemID);
+     //   itemManager.UseItem(itemID);
 
         Destroy(gameObject);
     }

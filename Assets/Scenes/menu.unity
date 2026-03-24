@@ -3485,13 +3485,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1107134021}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a882fde6612c0543b4bc4aeb3a61c3e, type: 3}
+  m_Script: {fileID: 11500000, guid: 31a05ac82fb5e184db343cace7cf72ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  button: {fileID: 1107134022}
   buttonText: {fileID: 346955341}
-  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  hoverScale: 1.2
-  duration: 0.2
 --- !u!114 &1107134024
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4470,13 +4468,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1345780613}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a882fde6612c0543b4bc4aeb3a61c3e, type: 3}
+  m_Script: {fileID: 11500000, guid: 31a05ac82fb5e184db343cace7cf72ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  button: {fileID: 1345780614}
   buttonText: {fileID: 778184884}
-  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  hoverScale: 1.2
-  duration: 0.2
 --- !u!1 &1352589869
 GameObject:
   m_ObjectHideFlags: 0
@@ -4704,13 +4700,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1352613083}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a882fde6612c0543b4bc4aeb3a61c3e, type: 3}
+  m_Script: {fileID: 11500000, guid: 31a05ac82fb5e184db343cace7cf72ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  button: {fileID: 1352613084}
   buttonText: {fileID: 193752365}
-  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  hoverScale: 1.2
-  duration: 0.2
 --- !u!114 &1352613086
 MonoBehaviour:
   m_ObjectHideFlags: 0
