@@ -18,7 +18,8 @@ public class SpawnPlayersGameplay : MonoBehaviour
             yield return null;
         }
 
-        while (!_runner.IsServer) yield return null;
+        // Kiểm tra Server hoặc Cloud Host tùy mode
+        while (!_runner.IsServer && !_runner.IsSharedModeMasterClient) yield return null;
 
         while (_runner.ActivePlayers.Count() < 2) { 
             yield return new WaitForSeconds(0.5f); 
@@ -48,16 +49,11 @@ public class SpawnPlayersGameplay : MonoBehaviour
             if (targetPoint == null) continue;
 
             Vector3 pos = targetPoint.position;
-            
-            // Lấy góc xoay từ Transform trong Unity Editor
             Quaternion rot = targetPoint.rotation;
 
-            // --- ĐOẠN SỬA ĐỂ HAI CON NHÌN NHAU ---
-            // Nếu là người chơi thứ 2 (bên phải), xoay thêm 180 độ quanh trục Y
             if (i == 1) {
                 rot *= Quaternion.Euler(0, 180, 0);
             }
-            // ------------------------------------
 
             int characterIndex = GetCharacterIndex(players[i]);
 
@@ -68,7 +64,7 @@ public class SpawnPlayersGameplay : MonoBehaviour
                 players[i]
             );
 
-            // Cưỡng chế vị trí và góc xoay ngay lập tức
+            // Ép vị trí
             playerObj.transform.position = pos;
             playerObj.transform.rotation = rot;
 
@@ -79,6 +75,13 @@ public class SpawnPlayersGameplay : MonoBehaviour
             if (playerObj.TryGetComponent<CharacterController>(out var cc)) {
                 cc.enabled = false;
                 StartCoroutine(ReEnableCC(cc));
+            }
+
+            // --- ĐOẠN MỚI: GÁN CAMERA ---
+            // Gọi RPC trên cái Player vừa spawn để nó tự bật Camera của nó lên
+            var camHandler = playerObj.GetComponent<PlayerCameraHandler>();
+            if (camHandler != null) {
+                camHandler.RPC_AssignCamera(i); 
             }
         }
     }
