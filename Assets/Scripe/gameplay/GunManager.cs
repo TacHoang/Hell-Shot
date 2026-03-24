@@ -83,43 +83,11 @@ public class GunManager : NetworkBehaviour
         int rand;
 
         if (currentRound == 1) { AddBulletsToList(tempBullets, 1, 1); }
-        else if (currentRound == 2)
-        {
-            rand = Random.Range(0, 3);
-            if (rand == 0) AddBulletsToList(tempBullets, 2, 2);
-            else if (rand == 1) AddBulletsToList(tempBullets, 1, 3);
-            else AddBulletsToList(tempBullets, 3, 1);
-        }
-        else if (currentRound == 3)
-        {
-            rand = Random.Range(0, 2);
-            if (rand == 0) AddBulletsToList(tempBullets, 2, 3);
-            else AddBulletsToList(tempBullets, 3, 2);
-        }
-        else if (currentRound == 4)
-        {
-            rand = Random.Range(0, 3);
-            if (rand == 0) AddBulletsToList(tempBullets, 3, 3);
-            else if (rand == 1) AddBulletsToList(tempBullets, 2, 4);
-            else AddBulletsToList(tempBullets, 4, 2);
-        }
-        else if (currentRound == 5)
-        {
-            rand = Random.Range(0, 4);
-            if (rand == 0) AddBulletsToList(tempBullets, 4, 3);
-            else if (rand == 1) AddBulletsToList(tempBullets, 3, 4);
-            else if (rand == 2) AddBulletsToList(tempBullets, 2, 5);
-            else AddBulletsToList(tempBullets, 5, 2);
-        }
-        else 
-        {
-            rand = Random.Range(0, 5);
-            if (rand == 0) AddBulletsToList(tempBullets, 4, 4);
-            else if (rand == 1) AddBulletsToList(tempBullets, 3, 5);
-            else if (rand == 2) AddBulletsToList(tempBullets, 5, 3);
-            else if (rand == 3) AddBulletsToList(tempBullets, 2, 6);
-            else AddBulletsToList(tempBullets, 6, 2);
-        }
+        else if (currentRound == 2) { rand = Random.Range(0, 3); if (rand == 0) AddBulletsToList(tempBullets, 2, 2); else if (rand == 1) AddBulletsToList(tempBullets, 1, 3); else AddBulletsToList(tempBullets, 3, 1); }
+        else if (currentRound == 3) { rand = Random.Range(0, 2); if (rand == 0) AddBulletsToList(tempBullets, 2, 3); else AddBulletsToList(tempBullets, 3, 2); }
+        else if (currentRound == 4) { rand = Random.Range(0, 3); if (rand == 0) AddBulletsToList(tempBullets, 3, 3); else if (rand == 1) AddBulletsToList(tempBullets, 2, 4); else AddBulletsToList(tempBullets, 4, 2); }
+        else if (currentRound == 5) { rand = Random.Range(0, 4); if (rand == 0) AddBulletsToList(tempBullets, 4, 3); else if (rand == 1) AddBulletsToList(tempBullets, 3, 4); else if (rand == 2) AddBulletsToList(tempBullets, 2, 5); else AddBulletsToList(tempBullets, 5, 2); }
+        else { rand = Random.Range(0, 5); if (rand == 0) AddBulletsToList(tempBullets, 4, 4); else if (rand == 1) AddBulletsToList(tempBullets, 3, 5); else if (rand == 2) AddBulletsToList(tempBullets, 5, 3); else if (rand == 3) AddBulletsToList(tempBullets, 2, 6); else if (rand == 4) AddBulletsToList(tempBullets, 6, 2); }
 
         for (int i = 0; i < tempBullets.Count; i++)
         {
@@ -129,10 +97,7 @@ public class GunManager : NetworkBehaviour
             tempBullets[randomIndex] = tmp;
         }
 
-        for (int i = 0; i < tempBullets.Count; i++)
-        {
-            bullets.Set(i, tempBullets[i]);
-        }
+        for (int i = 0; i < tempBullets.Count; i++) bullets.Set(i, tempBullets[i]);
         bulletCount = tempBullets.Count;
     }
 
@@ -144,7 +109,7 @@ public class GunManager : NetworkBehaviour
 
     public void RequestShoot(bool shootSelf)
     {
-        if (IsMyTurn() && !isWaitingNextRound)
+        if (IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating))
         {
             RPC_Shoot(shootSelf);
         }
@@ -156,44 +121,28 @@ public class GunManager : NetworkBehaviour
         if (bulletCount <= 0 || isWaitingNextRound) return;
 
         bool isReal = bullets[0];
-        // Đẩy đạn lên
         for (int i = 0; i < bulletCount - 1; i++) bullets.Set(i, bullets[i + 1]);
         bulletCount--;
 
         int damage = doubleDamage ? 2 : 1;
         doubleDamage = false;
-
-        bool shouldChangeTurn = true; // Mặc định là đổi lượt
+        bool shouldChangeTurn = true; 
 
         if (isReal)
         {
-            // ĐẠN THẬT: Bắn ai cũng mất lượt
-            if (shootSelf) {
-                if (activePlayerIndex == 0) player1HP -= damage; else player2HP -= damage;
-            } else {
-                if (activePlayerIndex == 0) player2HP -= damage; else player1HP -= damage;
-            }
+            if (shootSelf) { if (activePlayerIndex == 0) player1HP -= damage; else player2HP -= damage; }
+            else { if (activePlayerIndex == 0) player2HP -= damage; else player1HP -= damage; }
             shouldChangeTurn = true; 
         }
         else 
         {
-            // ĐẠN GIẢ:
-            if (shootSelf) {
-                shouldChangeTurn = false; // Bắn mình bằng đạn giả thì ĐƯỢC GIỮ LƯỢT
-            } else {
-                shouldChangeTurn = true;  // Bắn đối thủ bằng đạn giả thì VẪN MẤT LƯỢT
-            }
+            if (shootSelf) shouldChangeTurn = false; else shouldChangeTurn = true;
         }
 
-        // Thực hiện hiệu ứng
-        RPC_AnimateHealth();
+        // Truyền máu mới trực tiếp vào RPC để client chạy ngay
+        RPC_AnimateHealth(player1HP, player2HP); 
 
-        // Đổi lượt dựa trên logic mới
-        if (shouldChangeTurn)
-        {
-            ChangeTurn();
-        }
-
+        if (shouldChangeTurn) ChangeTurn();
         CheckGameOver();
 
         if (bulletCount <= 0)
@@ -204,29 +153,47 @@ public class GunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    void RPC_AnimateHealth()
+    void RPC_AnimateHealth(int p1HP, int p2HP)
     {
-        StartCoroutine(HealthAnimationSequence());
+        StartCoroutine(HealthAnimationSequence(p1HP, p2HP));
     }
 
-    IEnumerator HealthAnimationSequence()
+    IEnumerator HealthAnimationSequence(int p1HP, int p2HP)
     {
         if (hpUI == null) yield break;
+
+        // 1. Chạy thanh máu ra
         yield return hpUI.StartCoroutine(hpUI.ShowHealthGroups());
-        RefreshHealthUI(); 
-        yield return new WaitForSeconds(1.5f);
+
+        // 2. Nghỉ một chút
+        yield return new WaitForSeconds(0.5f);
+
+        // 3. Thực hiện rơi tim dựa trên số máu vừa nhận từ RPC
+        UpdateUIWithSpecificHP(p1HP, p2HP);
+
+        // 4. Đợi hiệu ứng rơi tim và nghỉ
+        yield return new WaitForSeconds(2.0f);
+
+        // 5. Chạy thanh máu vào
         yield return hpUI.StartCoroutine(hpUI.HideHealthGroups());
     }
 
-    void ChangeTurn() {
-        activePlayerIndex = (activePlayerIndex == 0) ? 1 : 0;
+    // Hàm phụ để cập nhật máu chính xác từ dữ liệu RPC
+    void UpdateUIWithSpecificHP(int p1, int p2)
+    {
+        if (hpUI == null) return;
+        var allPlayers = Runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
+        int myLocalIndex = allPlayers.IndexOf(Runner.LocalPlayer);
+
+        if (myLocalIndex == 0)
+            hpUI.UpdateHealthUI(p1, p2);
+        else
+            hpUI.UpdateHealthUI(p2, p1);
     }
 
-    void CheckGameOver()
-    {
-        if (player1HP <= 0) Debug.Log("PLAYER 2 THẮNG!");
-        if (player2HP <= 0) Debug.Log("PLAYER 1 THẮNG!");
-    }
+    void ChangeTurn() { activePlayerIndex = (activePlayerIndex == 0) ? 1 : 0; }
+
+    void CheckGameOver() { if (player1HP <= 0) Debug.Log("PLAYER 2 THẮNG!"); if (player2HP <= 0) Debug.Log("PLAYER 1 THẮNG!"); }
 
     void Update()
     {
@@ -239,7 +206,7 @@ public class GunManager : NetworkBehaviour
 
         if (shotCanvas != null)
         {
-            shotCanvas.SetActive(IsMyTurn() && !isWaitingNextRound);
+            shotCanvas.SetActive(IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating));
         }
     }
 
