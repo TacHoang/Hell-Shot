@@ -102,6 +102,11 @@ public class RoomUI : MonoBehaviour
     {
         if (runner != null && runner.IsServer)
         {
+            // 1. Khóa Room lại để không ai vào thêm được nữa khi đang load
+            runner.SessionInfo.IsOpen = false;
+
+            // 2. Gọi LoadScene thông qua Runner. 
+            // Fusion sẽ tự động đồng bộ hóa trạng thái Network trước khi kích hoạt Scene mới.
             runner.LoadScene(gameplayScene);
         }
     }
