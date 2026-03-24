@@ -1,70 +1,97 @@
-using UnityEngine;
 using Fusion;
+using UnityEngine;
 using System.Collections;
-using UnityEngine.SceneManagement;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 
 public class SpawnPlayersGameplay : MonoBehaviour
 {
-    public NetworkRunner runner;
-    public string gameplaySceneName = "Gameplay";
-
+    private NetworkRunner _runner;
     public NetworkPrefabRef[] playerPrefabs;
     public Transform spawnLeft;
     public Transform spawnRight;
 
-    bool hasSpawned = false;
-
-    void Start()
+    IEnumerator Start()
     {
-        if (runner == null)
-            runner = FindObjectOfType<NetworkRunner>();
-
-        StartCoroutine(SpawnPlayers());
-    }
-
-    IEnumerator SpawnPlayers()
-    {
-        if (hasSpawned) yield break;
-        hasSpawned = true;
-
-        // đợi server
-        while (runner == null || !runner.IsServer)
+        while (_runner == null) {
+            _runner = FindFirstObjectByType<NetworkRunner>();
             yield return null;
+        }
 
-        // đợi đúng scene
-        while (SceneManager.GetActiveScene().name != gameplaySceneName)
-            yield return null;
+        while (!_runner.IsServer) yield return null;
 
-        // đợi đủ player
-        while (runner.ActivePlayers.Count() < 2)
-            yield return null;
+        while (_runner.ActivePlayers.Count() < 2) { 
+            yield return new WaitForSeconds(0.5f); 
+        }
 
         yield return new WaitForSeconds(0.5f);
 
-        // lấy player list ổn định
-        List<PlayerRef> players = runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
+        if (spawnLeft != null && spawnRight != null) {
+            while (spawnLeft.position == Vector3.zero && spawnRight.position == Vector3.zero) {
+                Debug.Log("Đang đợi Transform Spawn cập nhật tọa độ thực...");
+                yield return null; 
+            }
+        }
 
+        yield return new WaitForSeconds(0.2f);
+
+        SpawnAll();
+    }
+
+    void SpawnAll()
+    {
+        var players = _runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
+        
         for (int i = 0; i < players.Count; i++)
         {
-            var player = players[i];
+            Transform targetPoint = (i == 0) ? spawnLeft : spawnRight;
+            if (targetPoint == null) continue;
 
-            Transform spawnPoint = (i % 2 == 0) ? spawnLeft : spawnRight;
-            Quaternion rot = (spawnPoint == spawnLeft) ? Quaternion.Euler(0, 180, 0) : Quaternion.identity;
+            Vector3 pos = targetPoint.position;
+            
+            // Lấy góc xoay từ Transform trong Unity Editor
+            Quaternion rot = targetPoint.rotation;
 
-            var rp = runner.GetPlayerObject(player)?.GetComponent<RoomPlayer>();
-            int charIndex = (rp != null) ? rp.CharacterIndex : 0;
-            charIndex = Mathf.Clamp(charIndex, 0, playerPrefabs.Length - 1);
+            // --- ĐOẠN SỬA ĐỂ HAI CON NHÌN NHAU ---
+            // Nếu là người chơi thứ 2 (bên phải), xoay thêm 180 độ quanh trục Y
+            if (i == 1) {
+                rot *= Quaternion.Euler(0, 180, 0);
+            }
+            // ------------------------------------
 
-            runner.Spawn(
-                playerPrefabs[charIndex],
-                spawnPoint.position,
-                rot,
-                player
+            int characterIndex = GetCharacterIndex(players[i]);
+
+            var playerObj = _runner.Spawn(
+                playerPrefabs[characterIndex], 
+                pos, 
+                rot, 
+                players[i]
             );
 
-            Debug.Log($"Spawn {player} | CharIndex: {charIndex} | Pos: {spawnPoint.position}");
+            // Cưỡng chế vị trí và góc xoay ngay lập tức
+            playerObj.transform.position = pos;
+            playerObj.transform.rotation = rot;
+
+            if (playerObj.TryGetComponent<NetworkTransform>(out var nt)) {
+                nt.Teleport(pos, rot);
+            }
+            
+            if (playerObj.TryGetComponent<CharacterController>(out var cc)) {
+                cc.enabled = false;
+                StartCoroutine(ReEnableCC(cc));
+            }
         }
+    }
+
+    int GetCharacterIndex(PlayerRef rel) 
+    {
+        var allRoomPlayers = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+        var rp = allRoomPlayers.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
+        return (rp != null) ? rp.CharacterIndex : 0;
+    }
+
+    IEnumerator ReEnableCC(CharacterController cc) {
+        yield return new WaitForSeconds(0.1f);
+        if (cc != null) cc.enabled = true;
     }
 }

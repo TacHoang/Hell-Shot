@@ -59,6 +59,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: f70499cf7d0133c4180c1d741a90fc9d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6363245190215798066}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: f70499cf7d0133c4180c1d741a90fc9d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6877683143335635784}
   m_SourcePrefab: {fileID: 100100000, guid: f70499cf7d0133c4180c1d741a90fc9d, type: 3}
 --- !u!1 &6893841702503473835 stripped
 GameObject:
@@ -81,5 +84,23 @@ MonoBehaviour:
   ObjectInterest: 1
   Flags: 262145
   NestedObjects: []
-  NetworkedBehaviours: []
+  NetworkedBehaviours:
+  - {fileID: 6877683143335635784}
   ForceRemoteRenderTimeframe: 0
+--- !u!114 &6877683143335635784
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6893841702503473835}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
