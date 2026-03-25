@@ -18,23 +18,31 @@ public class SpawnPlayersGameplay : MonoBehaviour
             yield return null;
         }
 
-        // Kiểm tra Server hoặc Cloud Host tùy mode
         while (!_runner.IsServer && !_runner.IsSharedModeMasterClient) yield return null;
 
+        // Đợi đủ 2 người join
         while (_runner.ActivePlayers.Count() < 2) { 
             yield return new WaitForSeconds(0.5f); 
         }
 
+        // 🔥 BỔ SUNG: Đợi cho đến khi tất cả RoomPlayer đều đã có mặt trong Scene mới
+        int readyPlayers = 0;
+        while (readyPlayers < 2) {
+            var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+            readyPlayers = allRP.Length;
+            Debug.Log($"Đang đợi RoomPlayer đồng bộ... Hiện có: {readyPlayers}/2");
+            yield return new WaitForSeconds(0.2f);
+        }
+
+        // Đợi thêm một chút để dữ liệu [Networked] kịp cập nhật từ Server
         yield return new WaitForSeconds(0.5f);
 
+        // Kiểm tra vị trí spawn như cũ của bạn...
         if (spawnLeft != null && spawnRight != null) {
             while (spawnLeft.position == Vector3.zero && spawnRight.position == Vector3.zero) {
-                Debug.Log("Đang đợi Transform Spawn cập nhật tọa độ thực...");
                 yield return null; 
             }
         }
-
-        yield return new WaitForSeconds(0.2f);
 
         SpawnAll();
     }
@@ -89,8 +97,22 @@ public class SpawnPlayersGameplay : MonoBehaviour
     int GetCharacterIndex(PlayerRef rel) 
     {
         var allRoomPlayers = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+        // Tìm RoomPlayer của người chơi này
         var rp = allRoomPlayers.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
-        return (rp != null) ? rp.CharacterIndex : 0;
+        
+        if (rp == null) {
+            Debug.LogWarning($"⚠️ Không tìm thấy RoomPlayer cho Player: {rel}");
+            return 0;
+        }
+
+        // Quan trọng: Đảm bảo index nằm trong dải index của mảng prefab
+        int index = rp.CharacterIndex;
+        if (index < 0 || index >= playerPrefabs.Length) {
+            Debug.LogError($"❌ Index {index} vượt quá số lượng Prefab!");
+            return 0;
+        }
+
+        return index;
     }
 
     IEnumerator ReEnableCC(CharacterController cc) {

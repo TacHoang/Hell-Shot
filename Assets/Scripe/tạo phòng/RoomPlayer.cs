@@ -10,7 +10,12 @@ public class RoomPlayer : NetworkBehaviour
     {
         if (HasInputAuthority)
         {
-            RPC_SetCharacter(CharacterIndex); // CharacterIndex local của player
+            // Ưu tiên lấy từ CharacterSelection vì nó vừa được nhấn nút đổi
+            int myIndex = CharacterSelection.Instance != null ? 
+                        CharacterSelection.Instance.characterIndex : 0;
+            
+            RPC_SetCharacter(myIndex); 
+            
             if (PlayerInfo.Instance != null)
                 RPC_SetName(PlayerInfo.Instance.PlayerName);
         }
@@ -19,6 +24,7 @@ public class RoomPlayer : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     void RPC_SetCharacter(int index)
     {
+        // Server nhận lệnh và cập nhật vào biến [Networked] để mọi người cùng thấy
         CharacterIndex = Mathf.Clamp(index, 0, 3);
     }
 
@@ -26,5 +32,11 @@ public class RoomPlayer : NetworkBehaviour
     void RPC_SetName(string name)
     {
         PlayerName = name;
+    }
+
+    // Đảm bảo RoomPlayer không bị mất khi chuyển Scene sang trận đấu
+    private void Awake()
+    {
+        DontDestroyOnLoad(this.gameObject);
     }
 }

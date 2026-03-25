@@ -134,25 +134,25 @@ public class NetworkManager : MonoBehaviour
         float timeout = 10f; 
         float timer = 0f;
 
+        // Chờ cho đến khi Runner IsRunning
         while (runner != null && !runner.IsRunning)
         {
             timer += Time.deltaTime;
             if (timer >= timeout)
             {
-                HandleJoinFailed("Không tìm thấy phòng hoặc timeout!");
+                HandleJoinFailed("Timeout kết nối!");
                 yield break;
             }
             yield return null;
         }
 
+        // 🔥 QUAN TRỌNG: Đợi thêm 1 chút xíu để Fusion ổn định dữ liệu Session
+        yield return new WaitForSeconds(0.5f);
+
         if (runner != null && runner.IsRunning)
         {
-            Debug.Log("✅ Join thành công!");
+            Debug.Log("✅ Join thực sự thành công, đang mở Lobby!");
             OnConnectSuccess();
-        }
-        else
-        {
-            HandleJoinFailed("Kết nối thất bại!");
         }
     }
 
