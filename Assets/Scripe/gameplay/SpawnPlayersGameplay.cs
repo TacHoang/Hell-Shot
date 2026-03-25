@@ -97,15 +97,22 @@ public class SpawnPlayersGameplay : MonoBehaviour
     int GetCharacterIndex(PlayerRef rel) 
     {
         var allRoomPlayers = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+        // Tìm RoomPlayer của người chơi này
         var rp = allRoomPlayers.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
         
         if (rp == null) {
-            Debug.LogWarning($"⚠️ Không tìm thấy RoomPlayer cho Player: {rel}. Trả về index 0");
+            Debug.LogWarning($"⚠️ Không tìm thấy RoomPlayer cho Player: {rel}");
             return 0;
         }
 
-        Debug.Log($"✅ Tìm thấy RoomPlayer cho {rel}, Index chọn là: {rp.CharacterIndex}");
-        return rp.CharacterIndex;
+        // Quan trọng: Đảm bảo index nằm trong dải index của mảng prefab
+        int index = rp.CharacterIndex;
+        if (index < 0 || index >= playerPrefabs.Length) {
+            Debug.LogError($"❌ Index {index} vượt quá số lượng Prefab!");
+            return 0;
+        }
+
+        return index;
     }
 
     IEnumerator ReEnableCC(CharacterController cc) {

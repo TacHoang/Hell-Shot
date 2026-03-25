@@ -6,12 +6,15 @@ public class CharacterButton : MonoBehaviour
 
     public void OnClick_ChangeCharacter()
     {
+        // Gọi hàm tăng index trong CharacterSelection
         CharacterSelection.Instance.NextCharacter();
         int index = CharacterSelection.Instance.characterIndex;
+        
         preview.ShowCharacter(index);
 
-        // Lưu lựa chọn nhân vật
-        PlayerPrefs.SetInt("SelectedCharacter", index);
-        PlayerPrefs.Save();
+        // 🔥 QUAN TRỌNG: Cập nhật luôn vào PlayerInfo để RoomPlayer thấy được
+        if (PlayerInfo.Instance != null) {
+            PlayerInfo.Instance.SelectedCharacterIndex = index;
+        }
     }
 }

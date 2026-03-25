@@ -8,20 +8,16 @@ public class RoomPlayer : NetworkBehaviour
 
     public override void Spawned()
     {
-        // Chỉ máy của người chơi đó mới thực hiện việc gửi dữ liệu của chính mình lên Server
         if (HasInputAuthority)
         {
+            // Ưu tiên lấy từ CharacterSelection vì nó vừa được nhấn nút đổi
+            int myIndex = CharacterSelection.Instance != null ? 
+                        CharacterSelection.Instance.characterIndex : 0;
+            
+            RPC_SetCharacter(myIndex); 
+            
             if (PlayerInfo.Instance != null)
-            {
-                // 🔥 SỬA TẠI ĐÂY: Lấy index đã chọn từ PlayerInfo ở ngoài Menu
-                int mySelectedChar = PlayerInfo.Instance.SelectedCharacterIndex;
-                RPC_SetCharacter(mySelectedChar); 
-
-                // Lấy tên từ PlayerInfo
                 RPC_SetName(PlayerInfo.Instance.PlayerName);
-                
-                Debug.Log($"[RoomPlayer] Đã đồng bộ nhân vật số {mySelectedChar} từ Menu lên Server.");
-            }
         }
     }
 
