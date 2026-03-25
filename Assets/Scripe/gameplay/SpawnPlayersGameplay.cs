@@ -18,23 +18,31 @@ public class SpawnPlayersGameplay : MonoBehaviour
             yield return null;
         }
 
-        // Kiểm tra Server hoặc Cloud Host tùy mode
         while (!_runner.IsServer && !_runner.IsSharedModeMasterClient) yield return null;
 
+        // Đợi đủ 2 người join
         while (_runner.ActivePlayers.Count() < 2) { 
             yield return new WaitForSeconds(0.5f); 
         }
 
+        // 🔥 BỔ SUNG: Đợi cho đến khi tất cả RoomPlayer đều đã có mặt trong Scene mới
+        int readyPlayers = 0;
+        while (readyPlayers < 2) {
+            var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+            readyPlayers = allRP.Length;
+            Debug.Log($"Đang đợi RoomPlayer đồng bộ... Hiện có: {readyPlayers}/2");
+            yield return new WaitForSeconds(0.2f);
+        }
+
+        // Đợi thêm một chút để dữ liệu [Networked] kịp cập nhật từ Server
         yield return new WaitForSeconds(0.5f);
 
+        // Kiểm tra vị trí spawn như cũ của bạn...
         if (spawnLeft != null && spawnRight != null) {
             while (spawnLeft.position == Vector3.zero && spawnRight.position == Vector3.zero) {
-                Debug.Log("Đang đợi Transform Spawn cập nhật tọa độ thực...");
                 yield return null; 
             }
         }
-
-        yield return new WaitForSeconds(0.2f);
 
         SpawnAll();
     }
@@ -90,7 +98,14 @@ public class SpawnPlayersGameplay : MonoBehaviour
     {
         var allRoomPlayers = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
         var rp = allRoomPlayers.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
-        return (rp != null) ? rp.CharacterIndex : 0;
+        
+        if (rp == null) {
+            Debug.LogWarning($"⚠️ Không tìm thấy RoomPlayer cho Player: {rel}. Trả về index 0");
+            return 0;
+        }
+
+        Debug.Log($"✅ Tìm thấy RoomPlayer cho {rel}, Index chọn là: {rp.CharacterIndex}");
+        return rp.CharacterIndex;
     }
 
     IEnumerator ReEnableCC(CharacterController cc) {
