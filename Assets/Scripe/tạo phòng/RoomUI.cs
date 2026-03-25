@@ -48,18 +48,34 @@ public class RoomUI : MonoBehaviour
         InvokeRepeating(nameof(RefreshPlayers), 0.5f, 1f);
     }
 
+    private float connectionLifeTime = 0f; // Thêm biến này ở trên đầu class RoomUI
+
     void Update()
     {
         if (runner == null || hasLeft) return;
 
-        // 👉 CLIENT tự detect host thoát
-        if (!runner.IsServer)
+        // 1. Tăng thời gian đếm để biết script đã chạy được bao lâu
+        connectionLifeTime += Time.deltaTime;
+
+        // 2. 🔥 QUAN TRỌNG: Nếu chưa ở trong phòng quá 3 giây, ĐỪNG CHECK GÌ CẢ
+        // Mục đích: Đợi Fusion đồng bộ xong danh sách người chơi (ActivePlayers)
+        if (connectionLifeTime < 3f) return;
+
+        // 3. Cứ mỗi 30 frame (khoảng 0.5 giây) mới kiểm tra 1 lần để nhẹ máy
+        if (Time.frameCount % 30 == 0) 
         {
-            if (runner.ActivePlayers.Count() <= 1)
+            // 👉 CLIENT tự detect host thoát
+            if (!runner.IsServer)
             {
-                hasLeft = true;
-                Debug.Log("Host đã thoát → quay về menu");
-                SceneManager.LoadScene(0);
+                // Nếu danh sách chỉ còn 1 người (là chính mình) hoặc Runner đã ngừng chạy
+                if (runner.ActivePlayers.Count() <= 1 || !runner.IsRunning)
+                {
+                    hasLeft = true;
+                    Debug.Log("Host đã thoát hoặc mất kết nối → quay về menu");
+                    
+                    // Gọi hàm dọn dẹp sạch sẽ của bạn
+                    StartCoroutine(FullResetGame());
+                }
             }
         }
     }
