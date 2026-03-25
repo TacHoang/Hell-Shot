@@ -3,22 +3,29 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 public class NetworkManager : MonoBehaviour
 {
+    [Header("UI Panels")]
     public GameObject mainMenuPanel;
     public GameObject joinRoomPanel;
+    public GameObject loadingPanel; // 🔥 Kéo Panel Loading vào đây
+    public GameObject lobbyCanvas;
+
+    [Header("UI Inputs")]
     public TMP_InputField joinRoomInput;
 
+    [Header("Network Settings")]
     public NetworkRunner runnerPrefab;
     private NetworkRunner runner;
-
-    //public SceneRef lobbyScene;
     public NetworkPrefabRef roomPlayerPrefab;
-    public GameObject lobbyCanvas;
 
     public async void StartGame(GameMode mode, string sessionID)
     {
+        // 1. Hiện loading ngay lập tức để chặn người dùng bấm lung tung
+        if (loadingPanel != null) loadingPanel.SetActive(true);
+
         if (runner == null)
         {
             runner = Instantiate(runnerPrefab);
@@ -31,62 +38,99 @@ public class NetworkManager : MonoBehaviour
         if (mode == GameMode.Host)
             props["HostName"] = PlayerInfo.Instance.PlayerName;
 
-        // 🔥 Bỏ scene, giữ canvas trong cùng scene
-        await runner.StartGame(new StartGameArgs()
+        // Bắt đầu quá trình StartGame của Fusion
+        var result = await runner.StartGame(new StartGameArgs()
         {
             GameMode = mode,
             SessionName = sessionID,
             SessionProperties = props,
             PlayerCount = 2,
-            SceneManager = null
+            SceneManager = null // Chạy trong cùng Scene, dùng Canvas để ẩn hiện
         });
 
-        // 🔥 Tắt menu, bật lobby canvas
-        mainMenuPanel.SetActive(false);
-        joinRoomPanel.SetActive(false);
+        if (result.Ok)
+        {
+            Debug.Log($"{mode} started successfully. RoomID: {sessionID}");
+            
+            // Nếu là Host, chuyển sang Lobby luôn vì Host hiếm khi fail
+            if (mode == GameMode.Host)
+            {
+                OnConnectSuccess();
+            }
+            // Nếu là Client, Coroutine CheckJoinSuccess sẽ lo phần còn lại
+        }
+        else
+        {
+            // Nếu fail ngay từ đầu (ví dụ: lỗi mạng local)
+            HandleJoinFailed($"Lỗi khởi tạo: {result.ShutdownReason}");
+        }
+    }
+
+    private void OnConnectSuccess()
+    {
+        if (loadingPanel != null) loadingPanel.SetActive(false);
+        if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
+        if (joinRoomPanel != null) joinRoomPanel.SetActive(false);
 
         if (lobbyCanvas != null)
-            lobbyCanvas.SetActive(true); // bật canvas bạn kéo vào inspector
+            lobbyCanvas.SetActive(true);
 
-        Debug.Log($"{mode} started. RoomID: {sessionID}");
-
-        // 🔥 kiểm tra spawn player liên tục
+        // Bắt đầu kiểm tra để spawn nhân vật đại diện trong Lobby
         InvokeRepeating(nameof(CheckSpawnPlayers), 1f, 1f);
     }
 
-    void CheckSpawnPlayers()
+    private async void HandleJoinFailed(string reason)
     {
-        if (runner == null || !runner.IsServer) return;
+        Debug.LogWarning($"Join thất bại: {reason}");
 
-        foreach (var player in runner.ActivePlayers)
+        if (loadingPanel != null) loadingPanel.SetActive(false);
+
+        // Quan trọng: Phải tắt và xóa Runner cũ để lần sau bấm lại không bị lỗi
+        if (runner != null)
         {
-            bool hasPlayer = false;
-
-            foreach (var obj in FindObjectsOfType<RoomPlayer>())
-            {
-                if (obj.Object != null && obj.Object.InputAuthority == player)
-                {
-                    hasPlayer = true;
-                    break;
-                }
-            }
-
-            if (!hasPlayer)
-            {
-                Debug.Log("Spawn player: " + player);
-
-                runner.Spawn(
-                    roomPlayerPrefab,
-                    Vector3.zero,
-                    Quaternion.identity,
-                    player
-                );
-            }
+            await runner.Shutdown();
+            if (runner != null) Destroy(runner.gameObject);
+            runner = null;
         }
 
-        // 🔥 THÊM DÒNG NÀY
-        RemoveDisconnectedPlayers();
+        // Tắt loading nma vẫn giữ ở màn hình Join để người dùng nhập lại ID
+        if (joinRoomPanel != null) joinRoomPanel.SetActive(true);
+        
+        // Dừng việc check spawn nếu có
+        CancelInvoke(nameof(CheckSpawnPlayers));
     }
+
+    IEnumerator CheckJoinSuccess()
+    {
+        float timeout = 10f; 
+        float timer = 0f;
+
+        // Đợi Runner kết nối thành công hoặc bị lỗi/timeout
+        while (runner != null && !runner.IsRunning)
+        {
+            timer += Time.deltaTime;
+
+            if (timer >= timeout)
+            {
+                HandleJoinFailed("Không tìm thấy phòng hoặc quá thời gian kết nối!");
+                yield break;
+            }
+
+            yield return null;
+        }
+
+        if (runner != null && runner.IsRunning)
+        {
+            Debug.Log("✅ Join thành công!");
+            OnConnectSuccess();
+        }
+        else
+        {
+            HandleJoinFailed("Kết nối thất bại!");
+        }
+    }
+
+    // --- UI Button Events ---
 
     public void OnClickCreate()
     {
@@ -116,50 +160,49 @@ public class NetworkManager : MonoBehaviour
             return;
         }
 
-        // Start client
         StartGame(GameMode.Client, id);
-
-        // 🔥 Thêm callback kiểm tra join thành công
         StartCoroutine(CheckJoinSuccess());
     }
 
-IEnumerator CheckJoinSuccess()
-{
-    float timeout = 10f; // 🔥 tăng lên
-    float timer = 0f;
+    // --- Logic Player Management ---
 
-    while (runner == null || !runner.IsRunning)
+    void CheckSpawnPlayers()
     {
-        timer += Time.deltaTime;
+        if (runner == null || !runner.IsServer) return;
 
-        if (timer >= timeout)
+        foreach (var player in runner.ActivePlayers)
         {
-            Debug.LogWarning("Không thể join phòng! Quay về menu...");
+            bool hasPlayer = false;
 
-            if (joinRoomPanel != null) joinRoomPanel.SetActive(false);
-            if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
+            foreach (var obj in FindObjectsOfType<RoomPlayer>())
+            {
+                if (obj.Object != null && obj.Object.InputAuthority == player)
+                {
+                    hasPlayer = true;
+                    break;
+                }
+            }
 
-            yield break;
+            if (!hasPlayer)
+            {
+                Debug.Log("Spawn player trong lobby: " + player);
+                runner.Spawn(roomPlayerPrefab, Vector3.zero, Quaternion.identity, player);
+            }
         }
 
-        yield return null;
+        RemoveDisconnectedPlayers();
     }
-
-    Debug.Log("✅ Join thành công!");
-}
 
     void RemoveDisconnectedPlayers()
     {
         if (runner == null || !runner.IsServer) return;
 
         var activePlayers = runner.ActivePlayers;
-
         foreach (var obj in FindObjectsOfType<RoomPlayer>())
         {
             if (obj.Object == null) continue;
 
             bool stillInGame = false;
-
             foreach (var player in activePlayers)
             {
                 if (obj.Object.InputAuthority == player)
@@ -169,10 +212,9 @@ IEnumerator CheckJoinSuccess()
                 }
             }
 
-            // ❌ nếu player không còn trong room → xóa
             if (!stillInGame)
             {
-                Debug.Log("Despawn player: " + obj.Object.InputAuthority);
+                Debug.Log("Despawn player đã thoát: " + obj.Object.InputAuthority);
                 runner.Despawn(obj.Object);
             }
         }
