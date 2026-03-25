@@ -8,8 +8,14 @@ public class SpawnPlayersGameplay : MonoBehaviour
 {
     private NetworkRunner _runner;
     public NetworkPrefabRef[] playerPrefabs;
-    public Transform spawnLeft;
-    public Transform spawnRight;
+    
+    [Header("--- Offsets Cho Người Chơi 1 (Bên Trái) ---")]
+    public Vector3[] offsetsLeft = new Vector3[4]; 
+
+    [Header("--- Offsets Cho Người Chơi 2 (Bên Phải) ---")]
+    public Vector3[] offsetsRight = new Vector3[4]; 
+
+    private List<NetworkObject> _spawnedTestObjects = new List<NetworkObject>();
 
     IEnumerator Start()
     {
@@ -20,103 +26,83 @@ public class SpawnPlayersGameplay : MonoBehaviour
 
         while (!_runner.IsServer && !_runner.IsSharedModeMasterClient) yield return null;
 
-        // Đợi đủ 2 người join
-        while (_runner.ActivePlayers.Count() < 2) { 
-            yield return new WaitForSeconds(0.5f); 
-        }
+        while (_runner.ActivePlayers.Count() < 2) yield return new WaitForSeconds(0.5f); 
 
-        // 🔥 BỔ SUNG: Đợi cho đến khi tất cả RoomPlayer đều đã có mặt trong Scene mới
         int readyPlayers = 0;
         while (readyPlayers < 2) {
             var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
             readyPlayers = allRP.Length;
-            Debug.Log($"Đang đợi RoomPlayer đồng bộ... Hiện có: {readyPlayers}/2");
             yield return new WaitForSeconds(0.2f);
         }
 
-        // Đợi thêm một chút để dữ liệu [Networked] kịp cập nhật từ Server
         yield return new WaitForSeconds(0.5f);
+        SpawnAll();
+    }
 
-        // Kiểm tra vị trí spawn như cũ của bạn...
-        if (spawnLeft != null && spawnRight != null) {
-            while (spawnLeft.position == Vector3.zero && spawnRight.position == Vector3.zero) {
-                yield return null; 
-            }
+    public void Test_NextCharacterAndSpawn()
+    {
+        if (_runner == null || !_runner.IsServer) return;
+
+        var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+        foreach (var rp in allRP) {
+            int next = rp.CharacterIndex + 1;
+            if (next >= playerPrefabs.Length) next = 0;
+            rp.CharacterIndex = next; 
         }
+
+        foreach (var obj in _spawnedTestObjects) {
+            if (obj != null) _runner.Despawn(obj);
+        }
+        _spawnedTestObjects.Clear();
 
         SpawnAll();
     }
 
     void SpawnAll()
-    {
-        var players = _runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
-        
-        for (int i = 0; i < players.Count; i++)
         {
-            Transform targetPoint = (i == 0) ? spawnLeft : spawnRight;
-            if (targetPoint == null) continue;
+            var players = _runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
+            Vector3 rootPos = transform.position;
 
-            Vector3 pos = targetPoint.position;
-            Quaternion rot = targetPoint.rotation;
+            for (int i = 0; i < players.Count; i++)
+            {
+                int characterIndex = GetCharacterIndex(players[i]);
+                Vector3 offset = (i == 0) ? offsetsLeft[characterIndex] : offsetsRight[characterIndex];
+                
+                Vector3 finalPos = rootPos + offset;
+                Quaternion rot = transform.rotation * (i == 1 ? Quaternion.Euler(0, 180, 0) : Quaternion.identity);
 
-            if (i == 1) {
-                rot *= Quaternion.Euler(0, 180, 0);
-            }
+                // 1. Spawn THẲNG vào vị trí chuẩn
+                var playerObj = _runner.Spawn(playerPrefabs[characterIndex], finalPos, rot, players[i]);
+                _spawnedTestObjects.Add(playerObj);
 
-            int characterIndex = GetCharacterIndex(players[i]);
-
-            var playerObj = _runner.Spawn(
-                playerPrefabs[characterIndex], 
-                pos, 
-                rot, 
-                players[i]
-            );
-
-            // Ép vị trí
-            playerObj.transform.position = pos;
-            playerObj.transform.rotation = rot;
-
-            if (playerObj.TryGetComponent<NetworkTransform>(out var nt)) {
-                nt.Teleport(pos, rot);
-            }
-            
-            if (playerObj.TryGetComponent<CharacterController>(out var cc)) {
-                cc.enabled = false;
-                StartCoroutine(ReEnableCC(cc));
-            }
-
-            // --- ĐOẠN MỚI: GÁN CAMERA ---
-            // Gọi RPC trên cái Player vừa spawn để nó tự bật Camera của nó lên
-            var camHandler = playerObj.GetComponent<PlayerCameraHandler>();
-            if (camHandler != null) {
-                camHandler.RPC_AssignCamera(i); 
+                // 2. Chỉ cần một bước nhỏ để bật lại "linh hồn" cho nó
+                CharacterController cc = playerObj.GetComponent<CharacterController>();
+                if (cc != null) StartCoroutine(ActivateCC(cc, finalPos));
+                
+                // Camera setup giữ nguyên
+                var camHandler = playerObj.GetComponent<PlayerCameraHandler>();
+                if (camHandler != null) camHandler.RPC_AssignCamera(i); 
             }
         }
+
+        IEnumerator ActivateCC(CharacterController cc, Vector3 pos) {
+            yield return new WaitForSeconds(0.1f); // Đợi Fusion ổn định
+            cc.transform.position = pos; // Ép lại lần cuối cho chắc
+            cc.enabled = true; 
+        }
+
+    int GetCharacterIndex(PlayerRef rel) {
+        var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
+        var rp = allRP.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
+        return (rp != null) ? rp.CharacterIndex : 0;
     }
 
-    int GetCharacterIndex(PlayerRef rel) 
-    {
-        var allRoomPlayers = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
-        // Tìm RoomPlayer của người chơi này
-        var rp = allRoomPlayers.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
-        
-        if (rp == null) {
-            Debug.LogWarning($"⚠️ Không tìm thấy RoomPlayer cho Player: {rel}");
-            return 0;
-        }
-
-        // Quan trọng: Đảm bảo index nằm trong dải index của mảng prefab
-        int index = rp.CharacterIndex;
-        if (index < 0 || index >= playerPrefabs.Length) {
-            Debug.LogError($"❌ Index {index} vượt quá số lượng Prefab!");
-            return 0;
-        }
-
-        return index;
-    }
-
-    IEnumerator ReEnableCC(CharacterController cc) {
+    IEnumerator ReEnableCC(CharacterController cc, Vector3 fixedPos, Quaternion fixedRot) {
         yield return new WaitForSeconds(0.1f);
-        if (cc != null) cc.enabled = true;
+        if (cc != null) {
+            cc.transform.position = fixedPos;
+            cc.enabled = true;
+            cc.transform.position = fixedPos; 
+        }
     }
 }
