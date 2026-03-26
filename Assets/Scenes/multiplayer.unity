@@ -235,11 +235,11 @@ Transform:
   m_GameObject: {fileID: 5307972}
   serializedVersion: 2
   m_LocalRotation: {x: 0.5439827, y: -0, z: -0, w: 0.8390965}
-  m_LocalPosition: {x: 0, y: -16.2, z: -79.7}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: 0, y: -10.800001, z: -53.13333}
+  m_LocalScale: {x: 0.6666667, y: 0.6666666, z: 0.6666666}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 543450652273373240}
   m_LocalEulerAnglesHint: {x: 65.91, y: 0, z: 0}
 --- !u!114 &5307976
 MonoBehaviour:
@@ -1696,12 +1696,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f6ae6329bbe43449bda154b7de2370e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  muzzlePoint: {fileID: 864510289}
-  zoomFOV: 30
-  normalFOV: 60
-  zoomDuration: 1.5
-  p1TablePos: {fileID: 1999908987}
-  p2TablePos: {fileID: 1317589263}
   _bullets: []
   _bulletCount: 0
   _player1HP: 0
@@ -1714,13 +1708,17 @@ MonoBehaviour:
     _value: 0
   _isCuffed:
     _value: 0
-  itemsManager: {fileID: 1579761528}
   rotatingGun: {fileID: 1536149595}
+  muzzlePoint: {fileID: 864510289}
+  itemsManager: {fileID: 1579761528}
   maxHP: 5
+  zoomFOV: 30
+  normalFOV: 60
+  zoomDuration: 1.5
+  hpUI: {fileID: 859562368}
   shotCanvas: {fileID: 1478963524}
   roundPanel: {fileID: 1090133264}
   roundText: {fileID: 215399017}
-  hpUI: {fileID: 859562368}
 --- !u!1 &802338734
 GameObject:
   m_ObjectHideFlags: 0
@@ -1942,7 +1940,7 @@ Transform:
   m_GameObject: {fileID: 864510288}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.7, y: 0.51, z: -0}
+  m_LocalPosition: {x: -5.89, y: 0, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3015,7 +3013,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8207937748999288240, guid: 4f958862b85f4ae41bc0f5dd5335874a, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.094
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8207937748999288240, guid: 4f958862b85f4ae41bc0f5dd5335874a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -3137,8 +3135,8 @@ MonoBehaviour:
   - {fileID: 310438352}
   glassPrefab: {fileID: 3757935267488002726, guid: 2885506bd40a5bd419d76096e8856ab6, type: 3}
   sawPrefab: {fileID: 5477976801999873947, guid: b40e14ec46aeeb447a1fa5cf0f0b563c, type: 3}
-  cuffPrefab: {fileID: 0}
-  sodaPrefab: {fileID: 0}
+  cuffPrefab: {fileID: 4604214763282354623, guid: 727381412365e8d4e8dd3d574075d2e1, type: 3}
+  sodaPrefab: {fileID: 4604214763282354623, guid: 727381412365e8d4e8dd3d574075d2e1, type: 3}
   pillPrefab: {fileID: 3535355681007397619, guid: a6c7b5921038bf54cb522ae2c817020c, type: 3}
   healthPrefab: {fileID: 4604214763282354623, guid: 727381412365e8d4e8dd3d574075d2e1, type: 3}
   _leftItems: 
@@ -3484,15 +3482,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -4181,6 +4179,7 @@ Transform:
   - {fileID: 81100749}
   - {fileID: 414666604}
   - {fileID: 1151127123}
+  - {fileID: 5307975}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &571537483126660372
@@ -5105,7 +5104,6 @@ SceneRoots:
   m_Roots:
   - {fileID: 1676996734}
   - {fileID: 107301355}
-  - {fileID: 5307975}
   - {fileID: 1652216716}
   - {fileID: 726744726}
   - {fileID: 543450652273373240}
@@ -5113,5 +5111,5 @@ SceneRoots:
   - {fileID: 747006994}
   - {fileID: 1377922249}
   - {fileID: 1579761529}
-  - {fileID: 1688885285}
   - {fileID: 1536149594}
+  - {fileID: 1688885285}

@@ -9,6 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4423990011379997355}
+  - component: {fileID: -5329516801210232674}
+  - component: {fileID: 377550481645832374}
   m_Layer: 0
   m_Name: kinhlup
   m_TagString: Untagged
@@ -32,6 +34,39 @@ Transform:
   - {fileID: 8054025404397576466}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &-5329516801210232674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3757935267488002726}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ada3707e1662284ebca7143076b1a49, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!65 &377550481645832374
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3757935267488002726}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.13, y: 0.013123754, z: 0.15}
+  m_Center: {x: -0.005177863, y: 0.0060297064, z: 0.0009146333}
 --- !u!1001 &3824458470344031646
 PrefabInstance:
   m_ObjectHideFlags: 0
