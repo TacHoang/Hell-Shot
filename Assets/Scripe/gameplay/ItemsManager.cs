@@ -1,6 +1,5 @@
 using Fusion;
 using UnityEngine;
-using System.Collections.Generic;
 using DG.Tweening;
 
 public class ItemsManager : NetworkBehaviour
@@ -9,8 +8,8 @@ public class ItemsManager : NetworkBehaviour
     public GunManager gunManager;
 
     [Header("Slots Configuration")]
-    public GameObject[] leftSlots;  // 8 ô bên TRÁI bàn (Dành cho P1)
-    public GameObject[] rightSlots; // 8 ô bên PHẢI bàn (Dành cho P2)
+    public GameObject[] leftSlots;  // 8 ô bên P1
+    public GameObject[] rightSlots; // 8 ô bên P2
 
     [Header("Item Prefabs")]
     public GameObject glassPrefab;  // ID 1
@@ -20,24 +19,20 @@ public class ItemsManager : NetworkBehaviour
     public GameObject pillPrefab;   // ID 5
     public GameObject healthPrefab; // ID 6
 
-    // Đồng bộ ID vật phẩm trong 8 ô trái và 8 ô phải
     [Networked, Capacity(8)] public NetworkArray<int> leftItems { get; }
     [Networked, Capacity(8)] public NetworkArray<int> rightItems { get; }
 
-    public override void Spawned()
-    {
-        // ĐÃ XÓA: GiveRandomItemsToBoth(2) để tránh việc vừa chuyển scene đã có đồ.
-    }
+    private int[] lastLeftItems = new int[8];
+    private int[] lastRightItems = new int[8];
 
-    // Hàm này sẽ được GunManager gọi mỗi khi bắt đầu Round mới
+    // --- LOGIC CẤP ĐỒ (Chỉ Server chạy) ---
     public void GiveRandomItemsToBoth(int amount)
     {
         if (!HasStateAuthority) return;
-
         for (int i = 0; i < amount; i++)
         {
-            AddItemToSide(true, Random.Range(1, 7));  // Thêm vào bên Trái
-            AddItemToSide(false, Random.Range(1, 7)); // Thêm vào bên Phải
+            AddItemToSide(true, Random.Range(1, 7));  
+            AddItemToSide(false, Random.Range(1, 7)); 
         }
     }
 
@@ -46,82 +41,85 @@ public class ItemsManager : NetworkBehaviour
         var targetArray = isLeft ? leftItems : rightItems;
         for (int i = 0; i < 8; i++)
         {
-            if (targetArray[i] == 0) 
-            {
+            if (targetArray[i] == 0) {
                 targetArray.Set(i, itemID);
                 break;
             }
         }
     }
 
+    // --- LOGIC HIỂN THỊ (Đồng bộ hóa Visual) ---
     public override void Render()
     {
-        // Tự động hiển thị item lên các slot tương ứng trên bàn
-        UpdateSlotVisuals(leftItems, leftSlots);
-        UpdateSlotVisuals(rightItems, rightSlots);
+        SyncVisuals(leftItems, leftSlots, lastLeftItems, true);
+        SyncVisuals(rightItems, rightSlots, lastRightItems, false);
     }
 
-    void UpdateSlotVisuals(NetworkArray<int> items, GameObject[] slots)
+    void SyncVisuals(NetworkArray<int> networkItems, GameObject[] slots, int[] cache, bool isLeft)
     {
         for (int i = 0; i < 8; i++)
         {
-            if (slots[i] == null) continue;
-
-            int currentID = items[i];
-            int childCount = slots[i].transform.childCount;
-
-            if (currentID == 0)
+            if (networkItems[i] != cache[i])
             {
-                if (childCount > 0)
-                {
-                    foreach (Transform child in slots[i].transform) Destroy(child.gameObject);
-                }
-            }
-            else 
-            {
-                if (childCount == 0)
-                {
-                    GameObject prefab = GetPrefabByID(currentID);
-                    if (prefab != null) 
-                    {
-                        GameObject item = Instantiate(prefab, slots[i].transform);
-                        // HIỆU ỨNG RƠI: Đặt vị trí cao hơn 1 xíu rồi cho rớt xuống
-                        Vector3 finalPos = item.transform.localPosition;
-                        item.transform.localPosition = finalPos + new Vector3(0, 5f, 0); // Cao hơn 5 đơn vị
-                        item.transform.DOLocalMove(finalPos, 0.5f).SetEase(Ease.OutBounce); // Rớt xuống nảy nhẹ
-                    }
-                }
+                UpdateSingleSlot(slots[i], networkItems[i], i, isLeft);
+                cache[i] = networkItems[i];
             }
         }
     }
 
-    GameObject GetPrefabByID(int id)
+    void UpdateSingleSlot(GameObject slot, int id, int index, bool isLeft)
     {
-        return id switch {
-            1 => glassPrefab, 2 => sawPrefab, 3 => cuffPrefab,
-            4 => sodaPrefab, 5 => pillPrefab, 6 => healthPrefab,
-            _ => null
-        };
+        if (slot == null) return;
+        
+        // Xóa vật thể cũ trong slot
+        foreach (Transform child in slot.transform) Destroy(child.gameObject);
+
+        if (id > 0)
+        {
+            GameObject prefab = GetPrefabByID(id);
+            if (prefab != null)
+            {
+                GameObject item = Instantiate(prefab, slot.transform);
+                item.transform.localPosition = new Vector3(0, 2f, 0); // Sinh ra từ trên cao
+                item.transform.DOLocalMove(Vector3.zero, 0.5f).SetEase(Ease.OutBounce);
+
+                // Gán detector click cho vật thể 3D vừa tạo
+                var clickScript = item.GetComponent<ItemClickDetector>() ?? item.AddComponent<ItemClickDetector>();
+                clickScript.Setup(this, index, isLeft);
+            }
+        }
     }
 
-    // Hàm gọi khi người chơi Click vào vật phẩm trên bàn
-    public void RequestUseItem(int slotIndex)
+    // --- LOGIC DÙNG VẬT PHẨM ---
+    public void RequestUseItem(int slotIndex, bool fromLeft)
     {
-        bool amILeft = (Runner.IsServer); 
-        RPC_ServerUseItem(amILeft, slotIndex);
+        if (Object == null || !Object.IsValid) return;
+
+        // Xác định local player là Host (0) hay Client (1)
+        int myIndex = Runner.IsServer ? 0 : 1;
+        
+        // 1. Kiểm tra lượt
+        if (myIndex != gunManager.activePlayerIndex) return;
+
+        // 2. Kiểm tra bấm đúng phía của mình không
+        bool isMySide = (myIndex == 0 && fromLeft) || (myIndex == 1 && !fromLeft);
+        if (!isMySide) return;
+
+        RPC_ServerUseItem(fromLeft, slotIndex, Runner.LocalPlayer);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    void RPC_ServerUseItem(bool fromLeft, int slotIndex)
+    void RPC_ServerUseItem(bool fromLeft, int slotIndex, PlayerRef user)
     {
         var targetArray = fromLeft ? leftItems : rightItems;
         int itemID = targetArray[slotIndex];
+        if (itemID <= 0) return;
 
-        if (itemID == 0) return;
-
-        // Kích hoạt công dụng trong GunManager
         switch (itemID)
         {
+            case 1: // KÍNH LÚP
+                RPC_ShowGlassResult(user, gunManager.GetCurrentBulletStatus());
+                break; 
             case 2: gunManager.RPC_UseItem_Cua(); break;
             case 3: gunManager.RPC_UseItem_CongTay(); break;
             case 4: gunManager.RPC_UseItem_NuocNgot(); break;
@@ -129,7 +127,18 @@ public class ItemsManager : NetworkBehaviour
             case 6: gunManager.RPC_UseItem_BinhMau(); break;
         }
 
-        // Dùng xong thì xóa ID trong mảng (Render sẽ tự xóa hình trên bàn)
-        targetArray.Set(slotIndex, 0);
+        targetArray.Set(slotIndex, 0); // Xóa khỏi NetworkArray để Render() tự xóa vật thể 3D
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)]
+    void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal)
+    {
+        // Hiển thị kết quả soi đạn chỉ cho người dùng
+        Debug.Log($"<color={(isReal ? "red" : "white")}>[SOI ĐẠN] Kết quả: {(isReal ? "ĐẠN THẬT" : "ĐẠN GIẢ")}</color>");
+    }
+
+    GameObject GetPrefabByID(int id)
+    {
+        return id switch { 1 => glassPrefab, 2 => sawPrefab, 3 => cuffPrefab, 4 => sodaPrefab, 5 => pillPrefab, 6 => healthPrefab, _ => null };
     }
 }
