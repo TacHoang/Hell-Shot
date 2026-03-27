@@ -146,7 +146,7 @@ public class NetworkManager : MonoBehaviour
 
     IEnumerator CheckJoinSuccess()
     {
-        float timeout = 10f; 
+        float timeout = 20f; 
         float timer = 0f;
 
         while (runner == null && timer < timeout) {
