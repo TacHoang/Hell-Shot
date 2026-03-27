@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1332046881925357934}
   - component: {fileID: 7588964738836982314}
   - component: {fileID: -8079275130622731218}
+  - component: {fileID: 364478432724771147}
   m_Layer: 0
   m_Name: Binhmau
   m_TagString: Untagged
@@ -67,6 +68,24 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.12, y: 0.18, z: 0.07856289}
   m_Center: {x: -0.0017994791, y: 0.07368725, z: 0.00024708733}
+--- !u!114 &364478432724771147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4604214763282354623}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fea29bb7c508c244a1f805a5fd3fc4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  outlineMode: 0
+  outlineColor: {r: 0, g: 1, b: 0.13979673, a: 1}
+  outlineWidth: 3
+  precomputeOutline: 0
+  bakeKeys: []
+  bakeValues: []
 --- !u!1001 &1220011829756703425
 PrefabInstance:
   m_ObjectHideFlags: 0
