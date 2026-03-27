@@ -136,6 +136,7 @@ public class GunManager : NetworkBehaviour
     public IEnumerator NextRoundRoutine() {
         if (!HasStateAuthority) yield break;
 
+        // Khóa tương tác khi đang chuẩn bị Round mới
         isWaitingNextRound = true; 
         GenerateBullets();
 
@@ -151,6 +152,7 @@ public class GunManager : NetworkBehaviour
             yield return new WaitForSeconds(1.5f); 
         }
 
+        // CHỈ MỞ KHÓA KHI TẤT CẢ HIỆU ỨNG ĐÃ XONG
         isWaitingNextRound = false; 
     }
 
@@ -195,6 +197,9 @@ public class GunManager : NetworkBehaviour
         if (bulletCount <= 0 || isWaitingNextRound) return;
 
         bool isReal = bullets[0];
+        // Lưu lại trạng thái xem đây có phải viên cuối không trước khi trừ bulletCount
+        bool isLastBullet = (bulletCount == 1);
+
         for (int i = 0; i < bulletCount - 1; i++) bullets.Set(i, bullets[i + 1]);
         bulletCount--;
 
@@ -212,12 +217,22 @@ public class GunManager : NetworkBehaviour
         player1HP = Mathf.Max(0, player1HP);
         player2HP = Mathf.Max(0, player2HP);
 
+        // Chạy animation máu
         RPC_AnimateHealth(player1HP, player2HP); 
 
-        if (shouldChangeTurn) ChangeTurn();
+        // LOGIC KHÓA TƯƠNG TÁC
+        if (isLastBullet) {
+            isWaitingNextRound = true; // Khóa ngay lập tức nếu hết đạn
+        }
+
+        // Chỉ đổi lượt nếu không phải viên cuối cùng (để tránh đối phương bấm được lúc đang chờ Round)
+        if (shouldChangeTurn && !isLastBullet) {
+            ChangeTurn();
+        }
+
         RPC_SyncVisuals(); 
 
-        if (bulletCount <= 0 && player1HP > 0 && player2HP > 0) 
+        if (isLastBullet && player1HP > 0 && player2HP > 0) 
         { 
             currentRound++; 
             StartCoroutine(WaitForHealthThenRound()); 
@@ -227,6 +242,7 @@ public class GunManager : NetworkBehaviour
 
     IEnumerator WaitForHealthThenRound()
     {
+        // Đợi hiệu ứng máu hiện lên và biến mất (khoảng 4s theo hàm HealthAnimationSequence)
         yield return new WaitForSeconds(4.0f); 
         StartCoroutine(NextRoundRoutine());
     }
@@ -235,20 +251,28 @@ public class GunManager : NetworkBehaviour
     void RPC_SyncVisuals() => RotateGunToActivePlayer();
 
     // --- CÁC HÀM ITEM ---
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_Cua() { doubleDamage = true; }
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_CongTay() { isCuffed = true; }
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_Cua() { if(!isWaitingNextRound) doubleDamage = true; }
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_CongTay() { if(!isWaitingNextRound) isCuffed = true; }
     
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
     public void RPC_UseItem_NuocNgot() {
+        if (isWaitingNextRound) return;
         if (bulletCount > 0) {
+            bool isLast = (bulletCount == 1);
             for (int i = 0; i < bulletCount - 1; i++) bullets.Set(i, bullets[i + 1]);
             bulletCount--;
-            if (bulletCount <= 0 && player1HP > 0 && player2HP > 0) { currentRound++; StartCoroutine(NextRoundRoutine()); }
+            
+            if (isLast && player1HP > 0 && player2HP > 0) { 
+                isWaitingNextRound = true;
+                currentRound++; 
+                StartCoroutine(NextRoundRoutine()); 
+            }
         }
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
     public void RPC_UseItem_BinhMau() {
+        if (isWaitingNextRound) return;
         if (activePlayerIndex == 0) player1HP = Mathf.Min(player1HP + 1, maxHP);
         else player2HP = Mathf.Min(player2HP + 1, maxHP);
         RPC_AnimateHealth(player1HP, player2HP);
@@ -256,6 +280,7 @@ public class GunManager : NetworkBehaviour
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
     public void RPC_UseItem_LoThuoc() {
+        if (isWaitingNextRound) return;
         int heal = (Random.Range(0, 2) == 0) ? 1 : -1;
         if (activePlayerIndex == 0) player1HP = Mathf.Clamp(player1HP + heal, 0, maxHP); 
         else player2HP = Mathf.Clamp(player2HP + heal, 0, maxHP);
@@ -276,10 +301,7 @@ public class GunManager : NetworkBehaviour
     
     IEnumerator HealthAnimationSequence(int p1, int p2) {
         if (hpUI == null) yield break;
-        
-        // 🔥 Cập nhật máu trước khi bắt đầu hiện thanh UI để tim mọc ra luôn
         UpdateUIWithSpecificHP(p1, p2);
-        
         yield return hpUI.StartCoroutine(hpUI.ShowHealthGroups());
         yield return new WaitForSeconds(2.0f);
         yield return hpUI.StartCoroutine(hpUI.HideHealthGroups());
@@ -287,7 +309,6 @@ public class GunManager : NetworkBehaviour
 
     void UpdateUIWithSpecificHP(int p1, int p2) {
         if (hpUI == null) return;
-        // Kiểm tra mình là Host hay Client để đảo bên UI cho đúng
         int myIndex = (Runner.IsServer) ? 0 : 1;
         if (myIndex == 0) hpUI.UpdateHealthUI(p1, p2); 
         else hpUI.UpdateHealthUI(p2, p1);
@@ -295,21 +316,23 @@ public class GunManager : NetworkBehaviour
 
     void Update() {
         if (Object == null || Runner == null) return;
+        
+        // Kiểm tra điều kiện để hiện nút bấm
+        bool canShowUI = canStartSequence && IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating);
+        
         if (shotCanvas != null) 
         {
-            bool showButtons = canStartSequence && IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating);
-            shotCanvas.SetActive(showButtons);
+            shotCanvas.SetActive(canShowUI);
         }
+
+        // Lưu ý: Trong ItemsManager, ông cũng nên kiểm tra 'canShowUI' hoặc 'isWaitingNextRound' 
+        // để ẩn danh sách vật phẩm khi đang chuyển Round.
     }
 
     public bool IsMyTurn() 
     {
         if (Runner == null || Runner.LocalPlayer == PlayerRef.None) return false;
-        
-        // Host (Server) luôn là index 0, Client là index 1
         int myIndex = (Runner.IsServer) ? 0 : 1;
-        
-        // Trả về true nếu máy hiện tại khớp với người đang được quyền hành động
         return myIndex == activePlayerIndex;
     }
 
