@@ -1,5 +1,7 @@
 using Fusion;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq; // Thêm cái này để xử lý danh sách Player
 using DG.Tweening;
 
 public class ItemsManager : NetworkBehaviour
@@ -95,13 +97,11 @@ public class ItemsManager : NetworkBehaviour
     {
         if (Object == null || !Object.IsValid) return;
 
-        // Xác định local player là Host (0) hay Client (1)
-        int myIndex = Runner.IsServer ? 0 : 1;
-        
-        // 1. Kiểm tra lượt
-        if (myIndex != gunManager.activePlayerIndex) return;
+        // 1. Kiểm tra lượt (Chặn ngay tại Client)
+        if (!gunManager.IsMyTurn()) return;
 
         // 2. Kiểm tra bấm đúng phía của mình không
+        int myIndex = Runner.IsServer ? 0 : 1;
         bool isMySide = (myIndex == 0 && fromLeft) || (myIndex == 1 && !fromLeft);
         if (!isMySide) return;
 
@@ -111,6 +111,18 @@ public class ItemsManager : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     void RPC_ServerUseItem(bool fromLeft, int slotIndex, PlayerRef user)
     {
+        // --- ĐOẠN ĐÃ SỬA: Xác minh người gửi không bị gạch đỏ ---
+        // Lấy danh sách người chơi đang active và tìm index của người gửi RPC
+        var players = Runner.ActivePlayers.ToList();
+        int senderIndex = players.IndexOf(user);
+
+        // Nếu index không khớp với người đang có lượt thì hủy lệnh
+        if (senderIndex != gunManager.activePlayerIndex) 
+        {
+            Debug.LogWarning($"Player {senderIndex} cố dùng đồ sai lượt!");
+            return; 
+        }
+
         var targetArray = fromLeft ? leftItems : rightItems;
         int itemID = targetArray[slotIndex];
         if (itemID <= 0) return;
@@ -127,7 +139,7 @@ public class ItemsManager : NetworkBehaviour
             case 6: gunManager.RPC_UseItem_BinhMau(); break;
         }
 
-        targetArray.Set(slotIndex, 0); // Xóa khỏi NetworkArray để Render() tự xóa vật thể 3D
+        targetArray.Set(slotIndex, 0); // Xóa khỏi NetworkArray để Render tự xóa Visual
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)]
