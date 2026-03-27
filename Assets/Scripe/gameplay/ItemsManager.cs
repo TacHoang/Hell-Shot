@@ -1,6 +1,9 @@
 using Fusion;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 using DG.Tweening;
+using TMPro; // Quan trọng để dùng TextMeshPro
 
 public class ItemsManager : NetworkBehaviour
 {
@@ -19,13 +22,17 @@ public class ItemsManager : NetworkBehaviour
     public GameObject pillPrefab;   // ID 5
     public GameObject healthPrefab; // ID 6
 
+    [Header("UI Tooltip")]
+    public GameObject tooltipPanel;    // Kéo cái Panel chứa Text vào đây
+    public TextMeshProUGUI tooltipText; // Kéo cái Text hiển thị nội dung vào đây
+
     [Networked, Capacity(8)] public NetworkArray<int> leftItems { get; }
     [Networked, Capacity(8)] public NetworkArray<int> rightItems { get; }
 
     private int[] lastLeftItems = new int[8];
     private int[] lastRightItems = new int[8];
 
-    // --- LOGIC CẤP ĐỒ (Chỉ Server chạy) ---
+    // --- LOGIC CẤP ĐỒ ---
     public void GiveRandomItemsToBoth(int amount)
     {
         if (!HasStateAuthority) return;
@@ -48,7 +55,7 @@ public class ItemsManager : NetworkBehaviour
         }
     }
 
-    // --- LOGIC HIỂN THỊ (Đồng bộ hóa Visual) ---
+    // --- LOGIC HIỂN THỊ ---
     public override void Render()
     {
         SyncVisuals(leftItems, leftSlots, lastLeftItems, true);
@@ -70,8 +77,6 @@ public class ItemsManager : NetworkBehaviour
     void UpdateSingleSlot(GameObject slot, int id, int index, bool isLeft)
     {
         if (slot == null) return;
-        
-        // Xóa vật thể cũ trong slot
         foreach (Transform child in slot.transform) Destroy(child.gameObject);
 
         if (id > 0)
@@ -80,28 +85,59 @@ public class ItemsManager : NetworkBehaviour
             if (prefab != null)
             {
                 GameObject item = Instantiate(prefab, slot.transform);
-                item.transform.localPosition = new Vector3(0, 2f, 0); // Sinh ra từ trên cao
+                item.transform.localPosition = new Vector3(0, 2f, 0);
                 item.transform.DOLocalMove(Vector3.zero, 0.5f).SetEase(Ease.OutBounce);
 
-                // Gán detector click cho vật thể 3D vừa tạo
                 var clickScript = item.GetComponent<ItemClickDetector>() ?? item.AddComponent<ItemClickDetector>();
                 clickScript.Setup(this, index, isLeft);
             }
         }
     }
 
+    // --- HÀM TOOLTIP (Dùng cho Hover) ---
+    public void ShowTooltip(int index, bool isLeft)
+    {
+        if (tooltipPanel == null || tooltipText == null) return;
+
+        int itemID = isLeft ? leftItems[index] : rightItems[index];
+        if (itemID <= 0) return;
+
+        tooltipPanel.SetActive(true);
+        tooltipText.text = GetItemDescription(itemID);
+        
+        // Hiệu ứng scale panel cho đẹp
+        tooltipPanel.transform.DOKill();
+        tooltipPanel.transform.localScale = Vector3.zero;
+        tooltipPanel.transform.DOScale(1f, 0.2f).SetEase(Ease.OutBack);
+    }
+
+    public void HideTooltip()
+    {
+        if (tooltipPanel == null) return;
+        tooltipPanel.transform.DOKill();
+        tooltipPanel.transform.DOScale(0f, 0.15f).OnComplete(() => tooltipPanel.SetActive(false));
+    }
+
+    string GetItemDescription(int id)
+    {
+        return id switch {
+            1 => "KÍNH LÚP: Xem viên đạn trong nòng là thật hay giả.",
+            2 => "LƯỠI CƯA: Tăng gấp đôi sát thương cho phát bắn tiếp theo.",
+            3 => "CÒNG TAY: Khóa lượt chơi của đối phương ở vòng sau.",
+            4 => "LON SODA: Loại bỏ viên đạn hiện tại ra khỏi súng.",
+            5 => "LÔ THUỐC: 50% hồi 1 máu, 50% bị trừ 1 máu.",
+            6 => "BÌNH MÁU: Hồi phục ngay lập tức 1 máu.",
+            _ => "Vật phẩm lạ."
+        };
+    }
+
     // --- LOGIC DÙNG VẬT PHẨM ---
     public void RequestUseItem(int slotIndex, bool fromLeft)
     {
         if (Object == null || !Object.IsValid) return;
+        if (!gunManager.IsMyTurn()) return;
 
-        // Xác định local player là Host (0) hay Client (1)
         int myIndex = Runner.IsServer ? 0 : 1;
-        
-        // 1. Kiểm tra lượt
-        if (myIndex != gunManager.activePlayerIndex) return;
-
-        // 2. Kiểm tra bấm đúng phía của mình không
         bool isMySide = (myIndex == 0 && fromLeft) || (myIndex == 1 && !fromLeft);
         if (!isMySide) return;
 
@@ -111,15 +147,18 @@ public class ItemsManager : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     void RPC_ServerUseItem(bool fromLeft, int slotIndex, PlayerRef user)
     {
+        var players = Runner.ActivePlayers.ToList();
+        int senderIndex = players.IndexOf(user);
+
+        if (senderIndex != gunManager.activePlayerIndex) return;
+
         var targetArray = fromLeft ? leftItems : rightItems;
         int itemID = targetArray[slotIndex];
         if (itemID <= 0) return;
 
         switch (itemID)
         {
-            case 1: // KÍNH LÚP
-                RPC_ShowGlassResult(user, gunManager.GetCurrentBulletStatus());
-                break; 
+            case 1: RPC_ShowGlassResult(user, gunManager.GetCurrentBulletStatus()); break; 
             case 2: gunManager.RPC_UseItem_Cua(); break;
             case 3: gunManager.RPC_UseItem_CongTay(); break;
             case 4: gunManager.RPC_UseItem_NuocNgot(); break;
@@ -127,13 +166,12 @@ public class ItemsManager : NetworkBehaviour
             case 6: gunManager.RPC_UseItem_BinhMau(); break;
         }
 
-        targetArray.Set(slotIndex, 0); // Xóa khỏi NetworkArray để Render() tự xóa vật thể 3D
+        targetArray.Set(slotIndex, 0);
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)]
     void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal)
     {
-        // Hiển thị kết quả soi đạn chỉ cho người dùng
         Debug.Log($"<color={(isReal ? "red" : "white")}>[SOI ĐẠN] Kết quả: {(isReal ? "ĐẠN THẬT" : "ĐẠN GIẢ")}</color>");
     }
 

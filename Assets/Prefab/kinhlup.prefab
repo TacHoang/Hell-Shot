@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 4423990011379997355}
   - component: {fileID: -5329516801210232674}
   - component: {fileID: 377550481645832374}
+  - component: {fileID: 9151662903124194941}
   m_Layer: 0
   m_Name: kinhlup
   m_TagString: Untagged
@@ -67,6 +68,24 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.13, y: 0.013123754, z: 0.15}
   m_Center: {x: -0.005177863, y: 0.0060297064, z: 0.0009146333}
+--- !u!114 &9151662903124194941
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3757935267488002726}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fea29bb7c508c244a1f805a5fd3fc4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  outlineMode: 0
+  outlineColor: {r: 0.95936406, g: 1, b: 0, a: 1}
+  outlineWidth: 3
+  precomputeOutline: 0
+  bakeKeys: []
+  bakeValues: []
 --- !u!1001 &3824458470344031646
 PrefabInstance:
   m_ObjectHideFlags: 0
