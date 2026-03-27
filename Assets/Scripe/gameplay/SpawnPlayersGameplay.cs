@@ -19,19 +19,19 @@ public class SpawnPlayersGameplay : MonoBehaviour
 
     IEnumerator Start()
     {
-        // Đợi NetworkRunner khởi động
+        // 1. Đợi NetworkRunner khởi động
         while (_runner == null) {
             _runner = FindFirstObjectByType<NetworkRunner>();
             yield return null;
         }
 
-        // Chỉ Host mới có quyền Spawn
+        // 2. Chỉ Host mới có quyền điều phối Spawn
         while (!_runner.IsServer && !_runner.IsSharedModeMasterClient) yield return null;
 
-        // Đợi đủ 2 người chơi vào phòng
+        // 3. Đợi đủ 2 người chơi vào phòng
         while (_runner.ActivePlayers.Count() < 2) yield return new WaitForSeconds(0.5f); 
 
-        // Đợi dữ liệu RoomPlayer (như CharacterIndex) sẵn sàng
+        // 4. Đợi dữ liệu RoomPlayer (như CharacterIndex) của cả 2 sẵn sàng
         int readyPlayers = 0;
         while (readyPlayers < 2) {
             var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
@@ -39,7 +39,9 @@ public class SpawnPlayersGameplay : MonoBehaviour
             yield return new WaitForSeconds(0.2f);
         }
 
+        // Đợi thêm một nhịp ngắn cho chắc chắn dữ liệu đồng bộ
         yield return new WaitForSeconds(0.5f);
+        
         SpawnAll();
     }
 
@@ -64,6 +66,8 @@ public class SpawnPlayersGameplay : MonoBehaviour
 
     void SpawnAll()
     {
+        if (!_runner.IsServer) return;
+
         // Sắp xếp người chơi để Host luôn đứng đầu (index 0)
         var players = _runner.ActivePlayers.OrderBy(p => p.RawEncoded).ToList();
         Vector3 rootPos = transform.position;
@@ -72,30 +76,49 @@ public class SpawnPlayersGameplay : MonoBehaviour
         {
             int characterIndex = GetCharacterIndex(players[i]);
             
-            // i == 0 là Host (Bên trái), i == 1 là Client (Bên phải)
+            // Xác định vị trí dựa trên Index người chơi (i=0: Trái, i=1: Phải)
             Vector3 offset = (i == 0) ? offsetsLeft[characterIndex] : offsetsRight[characterIndex];
-            
             Vector3 finalPos = rootPos + offset;
             
-            // Player 2 (Bên phải) sẽ quay mặt 180 độ đối diện Player 1
+            // Xoay mặt Player 2 đối diện Player 1
             Quaternion rot = transform.rotation * (i == 1 ? Quaternion.Euler(0, 180, 0) : Quaternion.identity);
 
-            // Spawn nhân vật
+            // Thực hiện Spawn
             var playerObj = _runner.Spawn(playerPrefabs[characterIndex], finalPos, rot, players[i]);
             _spawnedTestObjects.Add(playerObj);
 
-            // Bật CharacterController sau khi spawn để tránh lỗi dịch chuyển (Teleport)
+            // Xử lý CharacterController để tránh lỗi Teleport
             CharacterController cc = playerObj.GetComponent<CharacterController>();
             if (cc != null) StartCoroutine(ActivateCC(cc, finalPos));
             
-            // Gán Camera cho đúng góc nhìn của mỗi người
+            // Gán Camera qua RPC
             var camHandler = playerObj.GetComponent<PlayerCameraHandler>();
             if (camHandler != null) camHandler.RPC_AssignCamera(i); 
+        }
+
+        // 🔥 QUAN TRỌNG: Sau khi đã chạy lệnh Spawn cho tất cả, mới cho phép súng quay
+        StartCoroutine(TriggerGunStart());
+    }
+
+    IEnumerator TriggerGunStart()
+    {
+        // Đợi thêm 1-2 frame để đảm bảo các object vừa spawn đã được khởi tạo trên Network
+        yield return new WaitForEndOfFrame();
+
+        var gun = Object.FindAnyObjectByType<GunManager>();
+        if (gun != null)
+        {
+            // Set biến Networked canStartSequence để GunManager bên kia bắt đầu chạy MasterStartSequence
+            gun.canStartSequence = true;
+            Debug.Log("<color=green>Spawn hoàn tất - Kích hoạt GunManager!</color>");
+        }
+        else
+        {
+            Debug.LogWarning("Không tìm thấy GunManager trong Scene!");
         }
     }
 
     IEnumerator ActivateCC(CharacterController cc, Vector3 pos) {
-        // Tắt CC tạm thời, dịch chuyển về đúng chỗ rồi mới bật lại
         cc.enabled = false; 
         yield return new WaitForSeconds(0.1f); 
         cc.transform.position = pos; 
@@ -104,7 +127,6 @@ public class SpawnPlayersGameplay : MonoBehaviour
 
     int GetCharacterIndex(PlayerRef rel) {
         var allRP = Object.FindObjectsByType<RoomPlayer>(FindObjectsSortMode.None);
-        // Tìm RoomPlayer có InputAuthority khớp với Player đang xét
         var rp = allRP.FirstOrDefault(x => x.Object != null && x.Object.InputAuthority == rel);
         return (rp != null) ? rp.CharacterIndex : 0;
     }

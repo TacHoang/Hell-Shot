@@ -18,6 +18,7 @@ public class GunManager : NetworkBehaviour
     [Networked] public NetworkBool isWaitingNextRound { get; set; }
     [Networked] public NetworkBool doubleDamage { get; set; } 
     [Networked] public NetworkBool isCuffed { get; set; } 
+    [Networked] public NetworkBool canStartSequence { get; set; }
 
     // --- GAMEPLAY REFERENCES ---
     [Header("Core References")]
@@ -50,6 +51,7 @@ public class GunManager : NetworkBehaviour
             currentRound = 1;
             doubleDamage = false;
             isCuffed = false;
+            canStartSequence = false; 
 
             StartCoroutine(MasterStartSequence());
         }
@@ -57,6 +59,8 @@ public class GunManager : NetworkBehaviour
 
     IEnumerator MasterStartSequence()
     {
+        while (!canStartSequence) yield return null;
+
         isWaitingNextRound = true; 
         RPC_StartGunSpin();
 
@@ -167,7 +171,6 @@ public class GunManager : NetworkBehaviour
         if (currentRound == 1) AddBulletsToList(tempBullets, 1, 1);
         else AddBulletsToList(tempBullets, Random.Range(2, 5), Random.Range(2, 5));
         
-        // Shuffle
         for (int i = 0; i < tempBullets.Count; i++) {
             int r = Random.Range(i, tempBullets.Count);
             (tempBullets[i], tempBullets[r]) = (tempBullets[r], tempBullets[i]);
@@ -192,7 +195,6 @@ public class GunManager : NetworkBehaviour
         if (bulletCount <= 0 || isWaitingNextRound) return;
 
         bool isReal = bullets[0];
-        // Shift bullets
         for (int i = 0; i < bulletCount - 1; i++) bullets.Set(i, bullets[i + 1]);
         bulletCount--;
 
@@ -200,12 +202,10 @@ public class GunManager : NetworkBehaviour
         doubleDamage = false; 
 
         bool shouldChangeTurn = true;
-
         if (isReal) {
             if (activePlayerIndex == 0) { if (shootSelf) player1HP -= damage; else player2HP -= damage; }
             else { if (shootSelf) player2HP -= damage; else player1HP -= damage; }
         } else {
-            // Nếu bắn chính mình bằng đạn giả thì được đi tiếp
             if (shootSelf) shouldChangeTurn = false;
         }
 
@@ -215,7 +215,6 @@ public class GunManager : NetworkBehaviour
         RPC_AnimateHealth(player1HP, player2HP); 
 
         if (shouldChangeTurn) ChangeTurn();
-        
         RPC_SyncVisuals(); 
 
         if (bulletCount <= 0 && player1HP > 0 && player2HP > 0) 
@@ -265,10 +264,7 @@ public class GunManager : NetworkBehaviour
     }
 
     void ChangeTurn() { 
-        if (isCuffed) { 
-            isCuffed = false; // Mất còng nhưng không đổi lượt
-            return; 
-        } 
+        if (isCuffed) { isCuffed = false; return; } 
         activePlayerIndex = (activePlayerIndex == 0) ? 1 : 0; 
     }
     
@@ -280,14 +276,18 @@ public class GunManager : NetworkBehaviour
     
     IEnumerator HealthAnimationSequence(int p1, int p2) {
         if (hpUI == null) yield break;
-        yield return hpUI.StartCoroutine(hpUI.ShowHealthGroups());
+        
+        // 🔥 Cập nhật máu trước khi bắt đầu hiện thanh UI để tim mọc ra luôn
         UpdateUIWithSpecificHP(p1, p2);
+        
+        yield return hpUI.StartCoroutine(hpUI.ShowHealthGroups());
         yield return new WaitForSeconds(2.0f);
         yield return hpUI.StartCoroutine(hpUI.HideHealthGroups());
     }
 
     void UpdateUIWithSpecificHP(int p1, int p2) {
         if (hpUI == null) return;
+        // Kiểm tra mình là Host hay Client để đảo bên UI cho đúng
         int myIndex = (Runner.IsServer) ? 0 : 1;
         if (myIndex == 0) hpUI.UpdateHealthUI(p1, p2); 
         else hpUI.UpdateHealthUI(p2, p1);
@@ -296,12 +296,20 @@ public class GunManager : NetworkBehaviour
     void Update() {
         if (Object == null || Runner == null) return;
         if (shotCanvas != null) 
-            shotCanvas.SetActive(IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating));
+        {
+            bool showButtons = canStartSequence && IsMyTurn() && !isWaitingNextRound && (hpUI == null || !hpUI.isAnimating);
+            shotCanvas.SetActive(showButtons);
+        }
     }
 
-    public bool IsMyTurn() {
+    public bool IsMyTurn() 
+    {
         if (Runner == null || Runner.LocalPlayer == PlayerRef.None) return false;
+        
+        // Host (Server) luôn là index 0, Client là index 1
         int myIndex = (Runner.IsServer) ? 0 : 1;
+        
+        // Trả về true nếu máy hiện tại khớp với người đang được quyền hành động
         return myIndex == activePlayerIndex;
     }
 

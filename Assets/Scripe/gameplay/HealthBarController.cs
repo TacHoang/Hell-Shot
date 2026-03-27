@@ -17,7 +17,10 @@ public class HealthBarController : MonoBehaviour
     private CanvasGroup myCG;
     private CanvasGroup enemyCG;
 
-    public bool isAnimating = false;
+    // 🔥 Lưu vị trí gốc của từng trái tim để hồi máu không bị lệch
+    private Dictionary<Image, Vector2> heartAnchoredPositions = new Dictionary<Image, Vector2>();
+
+    [HideInInspector] public bool isAnimating = false;
 
     void Awake()
     {
@@ -27,11 +30,24 @@ public class HealthBarController : MonoBehaviour
         myCG = myHealthGroup.GetComponent<CanvasGroup>() ?? myHealthGroup.gameObject.AddComponent<CanvasGroup>();
         enemyCG = enemyHealthGroup.GetComponent<CanvasGroup>() ?? enemyHealthGroup.gameObject.AddComponent<CanvasGroup>();
 
+        // Lưu vị trí ban đầu của tất cả trái tim
+        CacheHeartPositions(myHearts);
+        CacheHeartPositions(enemyHearts);
+
         foreach (var h in myHearts) h.gameObject.SetActive(false);
         foreach (var h in enemyHearts) h.gameObject.SetActive(false);
         
         myCG.alpha = 0;
         enemyCG.alpha = 0;
+    }
+
+    void CacheHeartPositions(List<Image> hearts)
+    {
+        foreach (var h in hearts)
+        {
+            if (!heartAnchoredPositions.ContainsKey(h))
+                heartAnchoredPositions.Add(h, h.rectTransform.anchoredPosition);
+        }
     }
 
     public void StartHealthIntro()
@@ -50,86 +66,91 @@ public class HealthBarController : MonoBehaviour
 
         for (int i = 0; i < myHearts.Count; i++)
         {
-            myHearts[i].gameObject.SetActive(true);
-            myHearts[i].color = Color.white;
-            myHearts[i].transform.localScale = Vector3.zero;
-            myHearts[i].transform.DOScale(1f, 0.4f).SetEase(Ease.OutBack);
-
-            enemyHearts[i].gameObject.SetActive(true);
-            enemyHearts[i].color = Color.white;
-            enemyHearts[i].transform.localScale = Vector3.zero;
-            enemyHearts[i].transform.DOScale(1f, 0.4f).SetEase(Ease.OutBack);
-
-            yield return new WaitForSeconds(0.2f);
+            ResetHeartVisual(myHearts[i]);
+            ResetHeartVisual(enemyHearts[i]);
+            yield return new WaitForSeconds(0.15f);
         }
 
-        yield return new WaitForSeconds(1.5f); 
+        yield return new WaitForSeconds(1.0f); 
         yield return StartCoroutine(HideHealthGroups());
+    }
+
+    // 🔥 Hàm quan trọng: Đưa tim về vị trí cũ và reset trạng thái
+    private void ResetHeartVisual(Image heart)
+    {
+        heart.gameObject.SetActive(true);
+        heart.transform.DOKill();
+        heart.rectTransform.DOKill();
+        
+        // Đưa về đúng tọa độ trên thanh máu đã lưu trong Dictionary
+        heart.rectTransform.anchoredPosition = heartAnchoredPositions[heart];
+        
+        heart.color = Color.white;
+        heart.transform.localScale = Vector3.zero;
+        heart.transform.DOScale(1f, 0.4f).SetEase(Ease.OutBack);
     }
 
     public IEnumerator ShowHealthGroups()
     {
         isAnimating = true; 
-        myHealthGroup.DOAnchorPosX(myOriginalPos.x, 0.8f).SetEase(Ease.OutBack);
-        myCG.DOFade(1f, 0.8f);
-        enemyHealthGroup.DOAnchorPosX(enemyOriginalPos.x, 0.8f).SetEase(Ease.OutBack);
-        enemyCG.DOFade(1f, 0.8f);
-        yield return new WaitForSeconds(0.8f);
+        myHealthGroup.DOKill();
+        enemyHealthGroup.DOKill();
+        
+        myHealthGroup.DOAnchorPosX(myOriginalPos.x, 0.6f).SetEase(Ease.OutBack);
+        myCG.DOFade(1f, 0.6f);
+        enemyHealthGroup.DOAnchorPosX(enemyOriginalPos.x, 0.6f).SetEase(Ease.OutBack);
+        enemyCG.DOFade(1f, 0.6f);
+        
+        yield return new WaitForSeconds(0.6f);
     }
 
     public IEnumerator HideHealthGroups()
     {
-        myHealthGroup.DOAnchorPosX(myOriginalPos.x - 1000f, 0.8f).SetEase(Ease.InCubic);
-        myCG.DOFade(0f, 0.8f);
-        enemyHealthGroup.DOAnchorPosX(enemyOriginalPos.x + 1000f, 0.8f).SetEase(Ease.InCubic);
-        enemyCG.DOFade(0f, 0.8f);
+        myHealthGroup.DOKill();
+        enemyHealthGroup.DOKill();
+
+        myHealthGroup.DOAnchorPosX(myOriginalPos.x - 800f, 0.6f).SetEase(Ease.InSine);
+        myCG.DOFade(0f, 0.5f);
+        enemyHealthGroup.DOAnchorPosX(enemyOriginalPos.x + 800f, 0.6f).SetEase(Ease.InSine);
+        enemyCG.DOFade(0f, 0.5f);
         
-        yield return new WaitForSeconds(0.8f);
+        yield return new WaitForSeconds(0.6f);
         isAnimating = false; 
-    }
-
-    public void PlayHeartDropEffect(Image heart, bool isLeft)
-    {
-        if (heart == null || !heart.gameObject.activeSelf) return;
-
-        float jumpDirection = isLeft ? 150f : -150f; 
-        
-        heart.rectTransform.DOJumpAnchorPos(heart.rectTransform.anchoredPosition + new Vector2(jumpDirection, -400f), 200f, 1, 1.0f);
-        heart.DOFade(0, 1.0f);
-        heart.transform.DOScale(0.2f, 1.0f).OnComplete(() => {
-            heart.gameObject.SetActive(false);
-            heart.color = Color.white;
-        });
     }
 
     public void UpdateHealthUI(int leftHP, int rightHP)
     {
-        // Duyệt qua danh sách tim và kiểm tra xem tim nào cần rơi
-        for (int i = 0; i < myHearts.Count; i++)
-        {
-            if (i >= leftHP && myHearts[i].gameObject.activeSelf)
-                PlayHeartDropEffect(myHearts[i], true);
-            else if (i < leftHP && !myHearts[i].gameObject.activeSelf && !isAnimating) 
-            {
-                // Chỉ tự hồi tim khi không trong lúc đang animation trượt để tránh lỗi hiển thị
-                myHearts[i].gameObject.SetActive(true);
-                myHearts[i].transform.localScale = Vector3.zero;
-                myHearts[i].color = Color.white;
-                myHearts[i].transform.DOScale(1f, 0.3f);
-            }
-        }
+        UpdateHeartList(myHearts, leftHP, true);
+        UpdateHeartList(enemyHearts, rightHP, false);
+    }
 
-        for (int i = 0; i < enemyHearts.Count; i++)
+    private void UpdateHeartList(List<Image> hearts, int currentHP, bool isLeft)
+    {
+        for (int i = 0; i < hearts.Count; i++)
         {
-            if (i >= rightHP && enemyHearts[i].gameObject.activeSelf)
-                PlayHeartDropEffect(enemyHearts[i], false);
-            else if (i < rightHP && !enemyHearts[i].gameObject.activeSelf && !isAnimating)
+            if (i >= currentHP && hearts[i].gameObject.activeSelf)
             {
-                enemyHearts[i].gameObject.SetActive(true);
-                enemyHearts[i].transform.localScale = Vector3.zero;
-                enemyHearts[i].color = Color.white;
-                enemyHearts[i].transform.DOScale(1f, 0.3f);
+                PlayHeartDropEffect(hearts[i], isLeft);
+            }
+            else if (i < currentHP && !hearts[i].gameObject.activeSelf)
+            {
+                ResetHeartVisual(hearts[i]);
             }
         }
+    }
+
+    public void PlayHeartDropEffect(Image heart, bool isLeft)
+    {
+        if (heart == null) return;
+        heart.transform.DOKill();
+        heart.rectTransform.DOKill();
+
+        float jumpDirection = isLeft ? 120f : -120f; 
+        
+        heart.rectTransform.DOJumpAnchorPos(heart.rectTransform.anchoredPosition + new Vector2(jumpDirection, -500f), 150f, 1, 0.8f);
+        heart.DOFade(0, 0.8f);
+        heart.transform.DOScale(0.3f, 0.8f).OnComplete(() => {
+            heart.gameObject.SetActive(false);
+        });
     }
 }
