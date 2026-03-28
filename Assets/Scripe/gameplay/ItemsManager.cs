@@ -3,7 +3,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using DG.Tweening;
-using TMPro; // Quan trọng để dùng TextMeshPro
+using TMPro; 
 
 public class ItemsManager : NetworkBehaviour
 {
@@ -23,8 +23,8 @@ public class ItemsManager : NetworkBehaviour
     public GameObject healthPrefab; // ID 6
 
     [Header("UI Tooltip")]
-    public GameObject tooltipPanel;    // Kéo cái Panel chứa Text vào đây
-    public TextMeshProUGUI tooltipText; // Kéo cái Text hiển thị nội dung vào đây
+    public GameObject tooltipPanel;    
+    public TextMeshProUGUI tooltipText; 
 
     [Networked, Capacity(8)] public NetworkArray<int> leftItems { get; }
     [Networked, Capacity(8)] public NetworkArray<int> rightItems { get; }
@@ -94,7 +94,7 @@ public class ItemsManager : NetworkBehaviour
         }
     }
 
-    // --- HÀM TOOLTIP (Dùng cho Hover) ---
+    // --- HÀM TOOLTIP ---
     public void ShowTooltip(int index, bool isLeft)
     {
         if (tooltipPanel == null || tooltipText == null) return;
@@ -105,7 +105,6 @@ public class ItemsManager : NetworkBehaviour
         tooltipPanel.SetActive(true);
         tooltipText.text = GetItemDescription(itemID);
         
-        // Hiệu ứng scale panel cho đẹp
         tooltipPanel.transform.DOKill();
         tooltipPanel.transform.localScale = Vector3.zero;
         tooltipPanel.transform.DOScale(1f, 0.2f).SetEase(Ease.OutBack);
@@ -135,7 +134,9 @@ public class ItemsManager : NetworkBehaviour
     public void RequestUseItem(int slotIndex, bool fromLeft)
     {
         if (Object == null || !Object.IsValid) return;
-        if (!gunManager.IsMyTurn()) return;
+
+        // CHỈNH SỬA TẠI ĐÂY: Chặn dùng đồ nếu không phải lượt hoặc đang chờ chuyển Round
+        if (!gunManager.IsMyTurn() || gunManager.isWaitingNextRound) return;
 
         int myIndex = Runner.IsServer ? 0 : 1;
         bool isMySide = (myIndex == 0 && fromLeft) || (myIndex == 1 && !fromLeft);
@@ -147,6 +148,9 @@ public class ItemsManager : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     void RPC_ServerUseItem(bool fromLeft, int slotIndex, PlayerRef user)
     {
+        // Chặn thêm một lần nữa trên Server để đảm bảo an toàn tuyệt đối
+        if (gunManager.isWaitingNextRound) return;
+
         var players = Runner.ActivePlayers.ToList();
         int senderIndex = players.IndexOf(user);
 
