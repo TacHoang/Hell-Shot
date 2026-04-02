@@ -401,4 +401,6 @@ void Update()
     private void OnDestroy() {
         DOTween.KillAll(); // Dọn dẹp Tween khi đổi scene
     }
+    
+
 }
