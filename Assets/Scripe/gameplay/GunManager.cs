@@ -373,7 +373,8 @@ void Update()
             StartCoroutine(NextRoundRoutine()); 
         } 
     }
-    
+
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_BinhMau() { if (isWaitingNextRound || hasShotThisTurn) return; if (activePlayerIndex == 0) player1HP = Mathf.Min(player1HP + 1, maxHP); else player2HP = Mathf.Min(player2HP + 1, maxHP); RPC_AnimateHealth(player1HP, player2HP); }
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] public void RPC_UseItem_LoThuoc() { if (isWaitingNextRound || hasShotThisTurn) return; int h = (Random.Range(0, 2) == 0) ? 1 : -1; if (activePlayerIndex == 0) player1HP = Mathf.Clamp(player1HP + h, 0, maxHP); else player2HP = Mathf.Clamp(player2HP + h, 0, maxHP); RPC_AnimateHealth(player1HP, player2HP); CheckGameOver(); }
     
@@ -401,6 +402,6 @@ void Update()
     private void OnDestroy() {
         DOTween.KillAll(); // Dọn dẹp Tween khi đổi scene
     }
-    
+
 
 }
