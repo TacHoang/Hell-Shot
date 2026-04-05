@@ -28,9 +28,18 @@ public class ItemsManager : NetworkBehaviour
 
     [Networked, Capacity(8)] public NetworkArray<int> leftItems { get; }
     [Networked, Capacity(8)] public NetworkArray<int> rightItems { get; }
+    [Networked] public NetworkBool IsItemUsed { get; set; }
+
+    // Danh sách bridge của tất cả nhân vật hiện tại
+    private static List<ItemAnimationBridge> bridges = new List<ItemAnimationBridge>();
 
     private int[] lastLeftItems = new int[8];
     private int[] lastRightItems = new int[8];
+
+    public static void RegisterBridge(ItemAnimationBridge bridge)
+    {
+        if (!bridges.Contains(bridge)) bridges.Add(bridge);
+    }
 
     // --- LOGIC CẤP ĐỒ ---
     public void GiveRandomItemsToBoth(int amount)
@@ -131,53 +140,133 @@ public class ItemsManager : NetworkBehaviour
     }
 
     // --- LOGIC DÙNG VẬT PHẨM ---
+    // --- LOGIC DÙNG VẬT PHẨM ---
     public void RequestUseItem(int slotIndex, bool fromLeft)
     {
         if (Object == null || !Object.IsValid) return;
 
-        // CHỈNH SỬA TẠI ĐÂY: Chặn dùng đồ nếu không phải lượt hoặc đang chờ chuyển Round
+        // Chặn dùng đồ nếu không phải lượt hoặc đang chờ chuyển Round
         if (!gunManager.IsMyTurn() || gunManager.isWaitingNextRound) return;
 
         int myIndex = Runner.IsServer ? 0 : 1;
         bool isMySide = (myIndex == 0 && fromLeft) || (myIndex == 1 && !fromLeft);
         if (!isMySide) return;
 
+        // Gửi RPC lên server để xử lý
         RPC_ServerUseItem(fromLeft, slotIndex, Runner.LocalPlayer);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     void RPC_ServerUseItem(bool fromLeft, int slotIndex, PlayerRef user)
     {
-        // Chặn thêm một lần nữa trên Server để đảm bảo an toàn tuyệt đối
         if (gunManager.isWaitingNextRound) return;
 
         var players = Runner.ActivePlayers.ToList();
         int senderIndex = players.IndexOf(user);
-
         if (senderIndex != gunManager.activePlayerIndex) return;
 
         var targetArray = fromLeft ? leftItems : rightItems;
         int itemID = targetArray[slotIndex];
         if (itemID <= 0) return;
 
-        switch (itemID)
-        {
-            case 1: RPC_ShowGlassResult(user, gunManager.GetCurrentBulletStatus()); break; 
-            case 2: gunManager.RPC_UseItem_Cua(); break;
-            case 3: gunManager.RPC_UseItem_CongTay(); break;
-            case 4: gunManager.RPC_UseItem_NuocNgot(); break;
-            case 5: gunManager.RPC_UseItem_LoThuoc(); break;
-            case 6: gunManager.RPC_UseItem_BinhMau(); break;
-        }
+        // Logic xử lý item
+        if (itemID == 1) UseGlass(user, fromLeft);
+        else if (itemID == 2) UseSaw(user);
+        else if (itemID == 3) UseCuff(user);
+        else if (itemID == 4) UseSoda(user);
+        else if (itemID == 5) UsePill(user);
+        else if (itemID == 6) UseHealth(user);
 
         targetArray.Set(slotIndex, 0);
+        RPC_PlayItemUseAnimation(fromLeft, slotIndex);
+    }
+    public override void Spawned()
+    {
+        var bridge = GetComponent<ItemAnimationBridge>();
+        if (bridge != null)
+            bridge.ownerRef = Object.InputAuthority;
+    }
+
+
+    // --- Hàm riêng cho từng item ---
+    void UseGlass(PlayerRef user, bool fromLeft)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge == null) { Debug.LogError("Không tìm thấy bridge cho PlayerRef " + user); return; }
+
+        Debug.Log("Gọi trigger kính lúp cho " + user);
+        if (fromLeft) bridge.PlayGlassLeftAnimation();
+        else bridge.PlayGlassRightAnimation();
+    }
+
+    void UseSaw(PlayerRef user)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge != null) bridge.PlaySawAnimation();
+        gunManager.RPC_UseItem_Cua();
+    }
+
+    void UseCuff(PlayerRef user)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge != null) bridge.PlayCuffAnimation();
+        gunManager.RPC_UseItem_CongTay();
+    }
+
+    void UseSoda(PlayerRef user)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge != null) bridge.PlaySodaAnimation();
+        gunManager.RPC_UseItem_NuocNgot();
+    }
+
+    void UsePill(PlayerRef user)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge != null) bridge.PlayPillAnimation();
+        gunManager.RPC_UseItem_LoThuoc();
+    }
+
+    void UseHealth(PlayerRef user)
+    {
+        var bridge = FindBridgeForPlayer(user);
+        if (bridge != null) bridge.PlayHealthAnimation();
+        gunManager.RPC_UseItem_BinhMau();
+    }
+
+    ItemAnimationBridge FindBridgeForPlayer(PlayerRef user)
+    {
+        return bridges.FirstOrDefault(b => b.ownerRef == user);
+    }
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_PlayItemUseAnimation(bool fromLeft, int slotIndex)
+    {
+        var slots = fromLeft ? leftSlots : rightSlots;
+        var slot = slots[slotIndex];
+        if (slot != null && slot.transform.childCount > 0)
+        {
+            var item = slot.transform.GetChild(0);
+            // Chỉ scale nhỏ, không destroy
+            if (item != null)
+                item.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack).SetLink(item.gameObject);
+
+        }
+    }
+
+    public void CheckBulletAuthenticity()
+    {
+        bool isReal = gunManager.GetCurrentBulletStatus();
+
+        // Gửi kết quả soi kính cho đúng player
+        RPC_ShowGlassResult(Runner.LocalPlayer, isReal);
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)]
-    void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal)
+    public void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal)
     {
         Debug.Log($"<color={(isReal ? "red" : "white")}>[SOI ĐẠN] Kết quả: {(isReal ? "ĐẠN THẬT" : "ĐẠN GIẢ")}</color>");
     }
+
 
     GameObject GetPrefabByID(int id)
     {
