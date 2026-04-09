@@ -3699,8 +3699,8 @@ MonoBehaviour:
   - {fileID: 310438352}
   glassPrefab: {fileID: 3757935267488002726, guid: 2885506bd40a5bd419d76096e8856ab6, type: 3}
   sawPrefab: {fileID: 5477976801999873947, guid: b40e14ec46aeeb447a1fa5cf0f0b563c, type: 3}
-  cuffPrefab: {fileID: 8982495960017740362, guid: df309536545ce9a4892200a2827a4a88, type: 3}
-  sodaPrefab: {fileID: 5727586426130923954, guid: 4ff718eaf717e7d46b11ee8ab666af00, type: 3}
+  cuffPrefab: {fileID: 3901282336177034883, guid: ab9f42807e735364b8484771a18edbdf, type: 3}
+  sodaPrefab: {fileID: 7033287581627368189, guid: 1b6e386aed96647458ac4e0cdd5aa0c5, type: 3}
   pillPrefab: {fileID: 3535355681007397619, guid: a6c7b5921038bf54cb522ae2c817020c, type: 3}
   healthPrefab: {fileID: 4604214763282354623, guid: 727381412365e8d4e8dd3d574075d2e1, type: 3}
   tooltipPanel: {fileID: 934112249}
