@@ -6,7 +6,6 @@ public class ItemClickDetector : MonoBehaviour
     private ItemsManager manager;
     private int mySlotIndex;
     private bool mySideIsLeft;
-
     private Outline outlineEffect;
 
     public void Setup(ItemsManager m, int index, bool isLeft)
@@ -14,89 +13,46 @@ public class ItemClickDetector : MonoBehaviour
         manager = m;
         mySlotIndex = index;
         mySideIsLeft = isLeft;
-
-        // Lấy outline
         outlineEffect = GetComponentInChildren<Outline>();
-
-        if (outlineEffect == null)
-        {
-            Debug.LogWarning("[ItemClickDetector] Thiếu Outline trên: " + gameObject.name);
-        }
-        else
-        {
-            outlineEffect.enabled = false;
-            outlineEffect.OutlineColor = Color.yellow;
-            outlineEffect.OutlineWidth = 5f;
-            outlineEffect.OutlineMode = Outline.Mode.OutlineAll;
-        }
-
-        // Đảm bảo có collider
-        if (GetComponent<Collider>() == null)
-        {
-            var col = gameObject.AddComponent<BoxCollider>();
-            col.size = Vector3.one * 2f; // tăng size cho dễ hover
-        }
-    }
-
-    private void OnMouseEnter()
-    {
-        if (manager == null) return;
-
-        // Check đúng lượt
-        if (!manager.gunManager.IsMyTurn()) return;
-
-        // Check đúng bên
-        int myIndex = manager.Runner.IsServer ? 0 : 1;
-        bool isMySide = (myIndex == 0 && mySideIsLeft) || (myIndex == 1 && !mySideIsLeft);
-
-        if (!isMySide) return;
-
-        // Hiện viền
-        if (outlineEffect != null)
-            outlineEffect.enabled = true;
-
-        // ✅ HIỆN TOOLTIP
-        manager.ShowTooltip(mySlotIndex, mySideIsLeft);
-    }
-
-    private void OnMouseExit()
-    {
-        if (outlineEffect != null)
-            outlineEffect.enabled = false;
-
-        if (manager != null)
-            manager.HideTooltip();
+        if (outlineEffect != null) outlineEffect.enabled = false;
     }
 
     private void OnMouseDown()
     {
-        if (manager == null)
-            manager = FindObjectOfType<ItemsManager>();
+        if (manager == null || manager.gunManager == null) return;
 
-        if (manager == null) return;
+        if (!manager.gunManager.CanIInteract()) return;
 
-        // Check lượt
-        if (!manager.gunManager.IsMyTurn()) return;
-
-        // Check bên
         int myIndex = manager.Runner.IsServer ? 0 : 1;
         bool isMySide = (myIndex == 0 && mySideIsLeft) || (myIndex == 1 && !mySideIsLeft);
-
+        
         if (!isMySide) return;
 
-        // Tắt viền
-        if (outlineEffect != null)
-            outlineEffect.enabled = false;
-
-        // Ẩn tooltip luôn cho mượt
+        if (outlineEffect != null) outlineEffect.enabled = false;
         manager.HideTooltip();
 
-        // Animation
-        transform.DOScale(Vector3.zero, 0.15f)
-            .SetEase(Ease.InBack)
-            .OnComplete(() =>
-            {
-                manager.RequestUseItem(mySlotIndex, mySideIsLeft);
-            });
+        // SỬA TẠI ĐÂY: Không DOScale về zero nữa. 
+        // Chỉ làm hiệu ứng "nhấn" nhẹ (nảy lên) để người chơi biết là đã click thành công.
+        transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0.1f), 0.2f); 
+
+        // Gọi lệnh dùng Item ngay lập tức, vật phẩm vẫn hiển thị trên bàn chờ tay nhân vật tới nhặt.
+        manager.RequestUseItem(mySlotIndex, mySideIsLeft);
+    }
+
+    private void OnMouseEnter()
+    {
+        if (manager == null || !manager.gunManager.CanIInteract()) return;
+        int myIndex = manager.Runner.IsServer ? 0 : 1;
+        if ((myIndex == 0 && mySideIsLeft) || (myIndex == 1 && !mySideIsLeft))
+        {
+            if (outlineEffect != null) outlineEffect.enabled = true;
+            manager.ShowTooltip(mySlotIndex, mySideIsLeft);
+        }
+    }
+
+    private void OnMouseExit()
+    {
+        if (outlineEffect != null) outlineEffect.enabled = false;
+        if (manager != null) manager.HideTooltip();
     }
 }

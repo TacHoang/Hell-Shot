@@ -73,6 +73,9 @@ public class HealthBarController : MonoBehaviour
 
         yield return new WaitForSeconds(1.0f); 
         yield return StartCoroutine(HideHealthGroups());
+        
+        // Đảm bảo sau Intro là phải nhả lock
+        isAnimating = false; 
     }
 
     // 🔥 Hàm quan trọng: Đưa tim về vị trí cũ và reset trạng thái
@@ -112,10 +115,22 @@ public class HealthBarController : MonoBehaviour
         myHealthGroup.DOAnchorPosX(myOriginalPos.x - 800f, 0.6f).SetEase(Ease.InSine);
         myCG.DOFade(0f, 0.5f);
         enemyHealthGroup.DOAnchorPosX(enemyOriginalPos.x + 800f, 0.6f).SetEase(Ease.InSine);
-        enemyCG.DOFade(0f, 0.5f);
+        
+        enemyCG.DOFade(0f, 0.5f).OnComplete(() => {
+            isAnimating = false;
+            
+            // --- THÊM DÒNG NÀY VÀO ---
+            // Tìm ItemsManager hoặc GunManager để ép nó mở khóa UI
+            var itemsManager = FindObjectOfType<ItemsManager>();
+            if (itemsManager != null && itemsManager.gunManager != null)
+            {
+                // Gọi hàm Reset để mở lại 2 cái nút
+                itemsManager.gunManager.ResetActionLock(); 
+                Debug.Log("<color=green>[Fix]</color> Đã ép GunManager mở lại nút bấm!");
+            }
+        });
         
         yield return new WaitForSeconds(0.6f);
-        isAnimating = false; 
     }
 
     public void UpdateHealthUI(int leftHP, int rightHP)
