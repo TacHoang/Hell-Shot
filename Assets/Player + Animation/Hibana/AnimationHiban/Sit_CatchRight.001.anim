@@ -299092,7 +299092,7 @@ AnimationClip:
     floatParameter: 0
     intParameter: 0
     messageOptions: 0
-  - time: 2.9166667
+  - time: 3.2083333
     functionName: SwitchPropToRightHand
     data: 
     objectReferenceParameter: {fileID: 0}

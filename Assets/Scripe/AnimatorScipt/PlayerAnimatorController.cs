@@ -14,7 +14,7 @@ public class PlayerActionController : NetworkBehaviour
     private int _currentUsingItemID;
 
     [Header("Hand Props Setup")]
-    [Tooltip("KÉO ĐỒ TỪ HIERARCHY VÀO: 0-Soda, 1-Pill, 2-Health")]
+    [Tooltip("KÉO ĐỒ TỪ HIERARCHY VÀO: Element 0: Soda (ID 4), 1: Pill (ID 5), 2: Health (ID 6)")]
     public GameObject[] leftProps;
     public GameObject[] rightProps;
 
@@ -28,7 +28,9 @@ public class PlayerActionController : NetworkBehaviour
     public override void Spawned()
     {
         if (Object.HasInputAuthority) RPC_SetOwner(Runner.LocalPlayer);
-        ItemsManager.RegisterPlayerController(this);
+        
+        // Đảm bảo ItemsManager đã tồn tại trước khi đăng ký
+        if(ItemsManager.Instance != null) ItemsManager.RegisterPlayerController(this);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -40,15 +42,13 @@ public class PlayerActionController : NetworkBehaviour
     {
         HideAllProps();
         
+        // Nếu NetworkedPropIndex = -1, nghĩa là hành động đã kết thúc -> Ẩn đồ và mở khóa
         if (NetworkedPropIndex == -1) 
         {
             var itemsManager = FindObjectOfType<ItemsManager>();
             if (itemsManager != null && itemsManager.gunManager != null)
             {
-                // Nhả khóa Local cho mọi máy khách
                 itemsManager.gunManager.ResetActionLock();
-
-                // Nhả khóa trạng thái trên Server
                 if (itemsManager.gunManager.HasStateAuthority)
                 {
                     itemsManager.gunManager.isAnimatingAction = false;
@@ -57,8 +57,11 @@ public class PlayerActionController : NetworkBehaviour
             return;
         }
 
-        bool isRightHand = _anim.GetBool("IsRightSide");
-        GameObject prop = GetPropFromID(NetworkedPropIndex, !isRightHand);
+        // Kiểm tra xem đang dùng tay nào dựa trên Animator
+        bool isRightSide = _anim.GetBool("IsRightSide");
+        
+        // Bật đúng món đồ trên tay tương ứng
+        GameObject prop = GetPropFromID(NetworkedPropIndex, !isRightSide);
         if (prop != null) prop.SetActive(true);
     }
 
@@ -69,40 +72,50 @@ public class PlayerActionController : NetworkBehaviour
         _currentUsingItemID = itemID;
         _anim.SetBool("IsRightSide", isRightSide);
         _anim.SetTrigger("Use" + itemID); 
+        
         if (itemID >= 4) _anim.SetTrigger("DrinkTrigger");
     }
 
     private void HideAllProps()
     {
+        // Chỉ ẩn các object trong danh sách quản lý, không can thiệp vào Bone của Animator
         if (leftProps != null) foreach (var p in leftProps) if (p) p.SetActive(false);
         if (rightProps != null) foreach (var p in rightProps) if (p) p.SetActive(false);
-
-        if (_anim != null)
-        {
-            Transform rHand = _anim.GetBoneTransform(HumanBodyBones.RightHand);
-            Transform lHand = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
-            if (rHand) foreach (Transform t in rHand) t.gameObject.SetActive(false);
-            if (lHand) foreach (Transform t in lHand) t.gameObject.SetActive(false);
-        }
     }
 
     private GameObject GetPropFromID(int id, bool isLeft)
     {
-        int index = id - 4; 
+        int index = id - 4; // ID 4 -> index 0, ID 5 -> index 1...
         if (index < 0 || index >= 3) return null;
-        return isLeft ? leftProps[index] : rightProps[index];
+        
+        if (isLeft)
+            return (leftProps != null && index < leftProps.Length) ? leftProps[index] : null;
+        else
+            return (rightProps != null && index < rightProps.Length) ? rightProps[index] : null;
     }
 
-    // --- ANIMATION EVENTS ---
+    // --- ANIMATION EVENTS (Gọi từ Animation Clips) ---
 
     public void OnPickupMoment() 
     {
+        // 1. Đồng bộ vật phẩm lên tay (biến mạng)
         if (HasStateAuthority) NetworkedPropIndex = _currentUsingItemID;
+
+        // 2. Lệnh cho tất cả các máy ẩn vật phẩm dưới bàn đi ngay lập tức
+        var im = ItemsManager.Instance;
+        if (im != null && im.networkedPendingSlot != -1)
+        {
+            im.RPC_HideWorldItemVisual(im.networkedPendingFromLeft, im.networkedPendingSlot);
+        }
     }
 
     public void SwitchPropToRightHand()
     {
+        // CHỐT CHẶN: Nếu Server đã báo cất đồ (-1), không thực hiện chuyển tay để tránh kẹt đồ
+        if (NetworkedPropIndex == -1) return; 
+
         bool isRightSide = _anim.GetBool("IsRightSide");
+        // Nếu đang thực hiện animation chuyển từ trái sang phải (IsRightSide đang là false)
         if (!isRightSide)
         {
             GameObject leftP = GetPropFromID(_currentUsingItemID, true);
@@ -120,14 +133,11 @@ public class PlayerActionController : NetworkBehaviour
         var itemsManager = FindObjectOfType<ItemsManager>();
         if (itemsManager != null)
         {
-            // 1. Thực thi logic hiệu ứng (Hồi máu/Hỏng súng...)
             if (itemsManager.itemLogic != null)
                 itemsManager.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
 
-            // 2. XÓA VẬT PHẨM TRÊN BÀN: Đảm bảo server dọn dẹp ngay khi dùng
             itemsManager.RealClearItem(); 
-            
-            Debug.Log($"<color=orange>[Server]</color> Đã xóa vật phẩm ID {itemID} khỏi bàn.");
+            Debug.Log($"<color=orange>[Server]</color> Thực thi hiệu ứng và xóa vật phẩm ID {itemID}");
         }
     }
 
@@ -136,6 +146,7 @@ public class PlayerActionController : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_FinishAction()
     {
+        // Reset biến mạng về -1 -> Kích hoạt RefreshPropsVisibility ẩn toàn bộ đồ
         NetworkedPropIndex = -1;
 
         var itemsManager = FindObjectOfType<ItemsManager>();
@@ -144,6 +155,6 @@ public class PlayerActionController : NetworkBehaviour
             itemsManager.gunManager.isAnimatingAction = false;
         }
 
-        Debug.Log("<color=cyan>[Action]</color> Đã đồng bộ ẩn đồ và mở khóa lượt.");
+        Debug.Log("<color=cyan>[Action]</color> Kết thúc hành động, đã ẩn đồ.");
     }
 }

@@ -7,6 +7,9 @@ using TMPro;
 
 public class ItemsManager : NetworkBehaviour
 {
+    // --- SINGLETON PATTERN ---
+    public static ItemsManager Instance { get; private set; }
+
     [Header("References")]
     public GunManager gunManager;
     public ItemLogicHandler itemLogic;
@@ -30,7 +33,10 @@ public class ItemsManager : NetworkBehaviour
     [Networked, Capacity(8)] public NetworkArray<int> leftItems { get; }
     [Networked, Capacity(8)] public NetworkArray<int> rightItems { get; }
 
-    // --- HỆ THỐNG CONTROLLER (DÙNG ĐỂ GỌI ANIMATION) ---
+    // BIẾN MẠNG ĐỂ ĐỒNG BỘ VIỆC NHẶT ĐỒ
+    [Networked] public int networkedPendingSlot { get; set; } = -1;
+    [Networked] public NetworkBool networkedPendingFromLeft { get; set; }
+
     private static List<PlayerActionController> playerControllers = new List<PlayerActionController>();
 
     public static void RegisterPlayerController(PlayerActionController controller)
@@ -38,16 +44,20 @@ public class ItemsManager : NetworkBehaviour
         if (!playerControllers.Contains(controller)) playerControllers.Add(controller);
     }
 
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else if (Instance != this) Destroy(gameObject);
+    }
+
     private void OnDestroy()
     {
         playerControllers.Clear();
+        if (Instance == this) Instance = null;
     }
 
     private int[] lastLeftItems = new int[8];
     private int[] lastRightItems = new int[8];
-
-    private int pendingSlotIndex = -1;
-    private bool pendingFromLeft;
 
     // --- LOGIC CẤP ĐỒ ---
     public void GiveRandomItemsToBoth(int amount)
@@ -94,7 +104,6 @@ public class ItemsManager : NetworkBehaviour
     void UpdateSingleSlot(GameObject slot, int id, int index, bool isLeft)
     {
         if (slot == null) return;
-
         foreach (Transform child in slot.transform) Destroy(child.gameObject);
 
         if (id > 0)
@@ -103,7 +112,7 @@ public class ItemsManager : NetworkBehaviour
             if (prefab != null)
             {
                 GameObject item = Instantiate(prefab, slot.transform);
-                item.transform.localPosition = new Vector3(0, 2f, 0);
+                item.transform.localPosition = new Vector3(0, 2f, 0); 
                 item.transform.DOLocalMove(Vector3.zero, 0.5f).SetEase(Ease.OutBounce).SetLink(item);
 
                 var clickScript = item.GetComponent<ItemClickDetector>() ?? item.AddComponent<ItemClickDetector>();
@@ -116,8 +125,6 @@ public class ItemsManager : NetworkBehaviour
     public void RequestUseItem(int slotIndex, bool fromLeft)
     {
         if (Object == null || !Object.IsValid) return;
-        
-        // Chặn click nếu đang diễn animation hoặc không phải lượt
         if (!gunManager.CanIInteract() || gunManager.isWaitingNextRound) return;
 
         int myIndex = Runner.IsServer ? 0 : 1;
@@ -137,65 +144,64 @@ public class ItemsManager : NetworkBehaviour
 
         if (itemID > 0)
         {
-            // BƯỚC 1: KHÓA LOGIC
             gunManager.isAnimatingAction = true;
 
-            pendingSlotIndex = slotIndex;
-            pendingFromLeft = fromLeft;
-            Debug.Log($"<color=yellow>[System]</color> Khởi chạy dùng Item ID: {itemID}. Canvas đã khóa.");
+            // LƯU BIẾN MẠNG: Để tí nữa Animation Event biết slot nào mà ẩn
+            networkedPendingSlot = slotIndex;
+            networkedPendingFromLeft = fromLeft;
 
-            // BƯỚC 2: TÌM CONTROLLER VÀ GỌI ANIMATION
             playerControllers.RemoveAll(c => c == null);
             var controller = playerControllers.FirstOrDefault(c => c.PlayerOwner == user);
             
             if (controller != null)
             {
-                // Truyền ID vào controller trước để Event biết là món gì
                 controller.SetCurrentItem(itemID);
-
                 bool isRightSide = (slotIndex == 2 || slotIndex == 3 || slotIndex == 6 || slotIndex == 7);
                 controller.RPC_PlayPickupAction(itemID, isRightSide);
             }
             else
             {
-                Debug.LogError("[LỖI] Không tìm thấy Controller! Phá khóa khẩn cấp.");
                 gunManager.isAnimatingAction = false; 
             }
         }
     }
 
     /// <summary>
-    /// HÀM NÀY ĐƯỢC GỌI TỪ ANIMATION EVENT (OnPickupMoment)
+    /// Hiệu ứng làm biến mất vật phẩm trên bàn ngay lập tức (Gọi từ PlayerActionController)
+    /// </summary>
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_HideWorldItemVisual(bool fromLeft, int slotIndex)
+    {
+        var slots = fromLeft ? leftSlots : rightSlots;
+        if (slotIndex >= 0 && slotIndex < slots.Length)
+        {
+            GameObject slot = slots[slotIndex];
+            if (slot.transform.childCount > 0)
+            {
+                Transform item = slot.transform.GetChild(0);
+                // Hiệu ứng co nhỏ rồi ẩn đi
+                item.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack).OnComplete(() => {
+                    if(item != null) item.gameObject.SetActive(false);
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Xóa dữ liệu vật phẩm trong NetworkArray (Gọi ở cuối chuỗi animation)
     /// </summary>
     public void RealClearItem()
     {
         if (!HasStateAuthority) return;
 
-        if (pendingSlotIndex != -1)
+        if (networkedPendingSlot != -1)
         {
-            var targetArray = pendingFromLeft ? leftItems : rightItems;
-            if (targetArray[pendingSlotIndex] != 0)
+            var targetArray = networkedPendingFromLeft ? leftItems : rightItems;
+            if (targetArray[networkedPendingSlot] != 0)
             {
-                Debug.Log("<color=green>[Success]</color> Tay đã chạm đồ. Xóa dữ liệu Network Array.");
-                targetArray.Set(pendingSlotIndex, 0); 
+                targetArray.Set(networkedPendingSlot, 0); 
             }
-            pendingSlotIndex = -1; 
-        }
-
-        // LƯU Ý: Không set isAnimatingAction = false ở đây nữa!
-        // Hãy để Animation Event 'OnActionFinished' ở cuối clip lo việc đó.
-    }
-
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    void RPC_PlayItemShrinkEffect(bool fromLeft, int slotIndex)
-    {
-        var slots = fromLeft ? leftSlots : rightSlots;
-        var slot = slots[slotIndex];
-        if (slot != null && slot.transform.childCount > 0)
-        {
-            var item = slot.transform.GetChild(0);
-            if (item != null)
-                item.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack);
+            networkedPendingSlot = -1; // Reset slot chờ
         }
     }
 
