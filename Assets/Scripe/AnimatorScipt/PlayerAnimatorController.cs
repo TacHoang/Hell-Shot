@@ -7,28 +7,27 @@ public class PlayerActionController : NetworkBehaviour
     
     [Networked] public PlayerRef PlayerOwner { get; set; }
 
-    // Lưu ID vật phẩm để biết đang dùng món nào (4: Soda, 5: Thuốc, 6: Máu)
+    // BIẾN MẠNG: Đồng bộ ID vật phẩm (4,5,6). -1 là không cầm gì.
+    [Networked, OnChangedRender(nameof(RefreshPropsVisibility))] 
+    public int NetworkedPropIndex { get; set; } = -1; 
+
     private int _currentUsingItemID;
 
     [Header("Hand Props Setup")]
-    [Tooltip("Thứ tự kéo vào: 0-Soda, 1-Pill, 2-Health")]
-    public GameObject[] leftProps;  // 3 món gắn ở xương tay trái
-    public GameObject[] rightProps; // 3 món gắn ở xương tay phải
+    [Tooltip("KÉO ĐỒ TỪ HIERARCHY VÀO: 0-Soda, 1-Pill, 2-Health")]
+    public GameObject[] leftProps;
+    public GameObject[] rightProps;
 
     void Awake() 
     {
         _anim = GetComponent<Animator>();
         if (_anim == null) _anim = GetComponentInChildren<Animator>();
-        
-        HideAllProps(); // Khởi đầu ẩn hết đồ trên tay
+        HideAllProps();
     }
 
     public override void Spawned()
     {
-        if (Object.HasInputAuthority) 
-        {
-            RPC_SetOwner(Runner.LocalPlayer);
-        }
+        if (Object.HasInputAuthority) RPC_SetOwner(Runner.LocalPlayer);
         ItemsManager.RegisterPlayerController(this);
     }
 
@@ -37,118 +36,114 @@ public class PlayerActionController : NetworkBehaviour
 
     public void SetCurrentItem(int id) => _currentUsingItemID = id;
 
+    private void RefreshPropsVisibility()
+    {
+        HideAllProps();
+        
+        if (NetworkedPropIndex == -1) 
+        {
+            var itemsManager = FindObjectOfType<ItemsManager>();
+            if (itemsManager != null && itemsManager.gunManager != null)
+            {
+                // Nhả khóa Local cho mọi máy khách
+                itemsManager.gunManager.ResetActionLock();
+
+                // Nhả khóa trạng thái trên Server
+                if (itemsManager.gunManager.HasStateAuthority)
+                {
+                    itemsManager.gunManager.isAnimatingAction = false;
+                }
+            }
+            return;
+        }
+
+        bool isRightHand = _anim.GetBool("IsRightSide");
+        GameObject prop = GetPropFromID(NetworkedPropIndex, !isRightHand);
+        if (prop != null) prop.SetActive(true);
+    }
+
     [Rpc(RpcSources.All, RpcTargets.All)]
     public void RPC_PlayPickupAction(int itemID, bool isRightSide)
     {
         if (_anim == null) return;
-
         _currentUsingItemID = itemID;
         _anim.SetBool("IsRightSide", isRightSide);
-        
-        // Kích hoạt animation nhặt
         _anim.SetTrigger("Use" + itemID); 
-
-        // Nếu là đồ uống (4,5,6), gọi thêm Trigger để chuyển sang trạng thái uống tay phải
-        if (itemID >= 4)
-        {
-            _anim.SetTrigger("DrinkTrigger");
-        }
+        if (itemID >= 4) _anim.SetTrigger("DrinkTrigger");
     }
-
-    // ==========================================================
-    // --- HỆ THỐNG QUẢN LÝ ĐỒ TRÊN TAY (PROPS) ---
-    // ==========================================================
 
     private void HideAllProps()
     {
-        foreach (var p in leftProps) if (p) p.SetActive(false);
-        foreach (var p in rightProps) if (p) p.SetActive(false);
+        if (leftProps != null) foreach (var p in leftProps) if (p) p.SetActive(false);
+        if (rightProps != null) foreach (var p in rightProps) if (p) p.SetActive(false);
+
+        if (_anim != null)
+        {
+            Transform rHand = _anim.GetBoneTransform(HumanBodyBones.RightHand);
+            Transform lHand = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (rHand) foreach (Transform t in rHand) t.gameObject.SetActive(false);
+            if (lHand) foreach (Transform t in lHand) t.gameObject.SetActive(false);
+        }
     }
 
     private GameObject GetPropFromID(int id, bool isLeft)
     {
-        int index = id - 4; // Map ID 4,5,6 thành Index 0,1,2
+        int index = id - 4; 
         if (index < 0 || index >= 3) return null;
         return isLeft ? leftProps[index] : rightProps[index];
     }
 
-    // ==========================================================
-    // --- ANIMATION EVENTS (GẮN TRÊN CLIP TRONG UNITY) ---
-    // ==========================================================
+    // --- ANIMATION EVENTS ---
 
-    /// <summary>
-    /// EVENT 1: Tay chạm bàn. Hiện đồ lên tay tương ứng và xóa đồ dưới bàn.
-    /// </summary>
     public void OnPickupMoment() 
     {
-        bool isRightHandAction = _anim.GetBool("IsRightSide");
-
-        // Hiện món đồ giả lên tay vừa chạm vào bàn
-        GameObject pickedProp = GetPropFromID(_currentUsingItemID, !isRightHandAction);
-        if (pickedProp) pickedProp.SetActive(true);
-
-        // Chỉ Server thực hiện xóa dữ liệu dưới bàn
-        if (Runner.IsServer)
-        {
-            var itemsManager = FindObjectOfType<ItemsManager>();
-            if (itemsManager != null) itemsManager.RealClearItem();
-        }
+        if (HasStateAuthority) NetworkedPropIndex = _currentUsingItemID;
     }
 
-    /// <summary>
-    /// EVENT TRÁO ĐỒ: Gọi lúc tay trái thu về và tay phải bắt đầu dơ lên uống.
-    /// </summary>
     public void SwitchPropToRightHand()
     {
-        bool isRightHandAction = _anim.GetBool("IsRightSide");
-
-        // Nếu ban đầu nhặt bằng tay trái (!isRightHandAction), thì phải tráo sang phải
-        if (!isRightHandAction)
+        bool isRightSide = _anim.GetBool("IsRightSide");
+        if (!isRightSide)
         {
-            GameObject leftProp = GetPropFromID(_currentUsingItemID, true);
-            GameObject rightProp = GetPropFromID(_currentUsingItemID, false);
-
-            if (leftProp) leftProp.SetActive(false);
-            if (rightProp) rightProp.SetActive(true);
+            GameObject leftP = GetPropFromID(_currentUsingItemID, true);
+            GameObject rightP = GetPropFromID(_currentUsingItemID, false);
+            if (leftP) leftP.SetActive(false);
+            if (rightP) rightP.SetActive(true);
         }
     }
 
-    /// <summary>
-    /// EVENT 2: Nhân vật thực hiện hành động uống (Giữa clip).
-    /// </summary>
     public void OnItemEffectMoment() => RPC_ApplyItemEffect(_currentUsingItemID);
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_ApplyItemEffect(int itemID)
     {
         var itemsManager = FindObjectOfType<ItemsManager>();
-        if (itemsManager != null && itemsManager.itemLogic != null)
+        if (itemsManager != null)
         {
-            itemsManager.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
+            // 1. Thực thi logic hiệu ứng (Hồi máu/Hỏng súng...)
+            if (itemsManager.itemLogic != null)
+                itemsManager.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
+
+            // 2. XÓA VẬT PHẨM TRÊN BÀN: Đảm bảo server dọn dẹp ngay khi dùng
+            itemsManager.RealClearItem(); 
+            
+            Debug.Log($"<color=orange>[Server]</color> Đã xóa vật phẩm ID {itemID} khỏi bàn.");
         }
     }
 
-    /// <summary>
-    /// EVENT 3: Kết thúc hoàn toàn, ẩn đồ trên tay và mở khóa UI.
-    /// </summary>
-    public void OnActionFinished()
-    {
-        Debug.Log("<color=yellow>[Event]</color> Animation Finished được gọi!");
-        // Gọi RPC để Server mở khóa
-        RPC_FinishAction();
-    }
+    public void OnActionFinished() => RPC_FinishAction();
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_FinishAction()
     {
+        NetworkedPropIndex = -1;
+
         var itemsManager = FindObjectOfType<ItemsManager>();
         if (itemsManager != null && itemsManager.gunManager != null)
         {
-            // Ép biến này về false trên Server
             itemsManager.gunManager.isAnimatingAction = false;
-            
-            // TIẾP CHIÊU: Reset luôn cả lock cục bộ nếu có
-            itemsManager.gunManager.ResetActionLock(); 
         }
+
+        Debug.Log("<color=cyan>[Action]</color> Đã đồng bộ ẩn đồ và mở khóa lượt.");
     }
 }

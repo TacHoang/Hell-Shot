@@ -96,14 +96,21 @@ public class GunManager : NetworkBehaviour
             RPC_Shoot(shootSelf); 
         } 
     }
+
     // Thêm hàm này vào GunManager.cs
     public void ResetActionLock()
     {
-        if (HasStateAuthority)
-        {
-            isAnimatingAction = false;
-        }
+        // 1. Nhả khóa mạng (Chỉ máy chủ/máy bắn mới có quyền ghi)
+        if (HasStateAuthority) isAnimatingAction = false;
+        
+        // 2. Nhả khóa tại máy đang chơi (Quan trọng nhất để hiện nút)
         localActionLock = false;
+        hasShotThisTurn = false; // Đảm bảo lượt mới không bị tính là đã bắn
+
+        // 3. Ép thanh máu dừng báo cáo bận
+        if (hpUI != null) hpUI.isAnimating = false; 
+        
+        Debug.Log("<color=green>[GunManager]</color> Đã cưỡng ép RESET toàn bộ khóa UI!");
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
@@ -160,10 +167,17 @@ public class GunManager : NetworkBehaviour
         if (hpUI != null) {
             UpdateUIWithSpecificHP(p1, p2); 
             yield return StartCoroutine(hpUI.ShowHealthGroups()); 
-            yield return new WaitForSeconds(2.0f); 
+            yield return new WaitForSeconds(1.5f); // Thời gian chờ xem máu trừ
             yield return StartCoroutine(hpUI.HideHealthGroups()); 
         }
-        localActionLock = false;
+
+        // --- ĐOẠN SỬA: Phải gọi ResetActionLock ở đây ---
+        ResetActionLock();
+
+        // Nếu là viên cuối, không nhả lock ngay mà để NextRoundRoutine xử lý
+        if (lastBullet) {
+            isWaitingNextRound = true;
+        }
     }
 
     public void ChangeTurn() { 
@@ -324,15 +338,19 @@ public class GunManager : NetworkBehaviour
         }
 
         // --- DEBUG LOG (Để ông soi lỗi khi nút không hiện) ---
+// --- DEBUG LOG (Bản sửa lỗi chạy vô hạn) ---
         if (isMyTurn && !hasShotThisTurn && !shouldShowShot && canStartSequence && !isWaitingNextRound)
         {
-            // Nếu đến lượt mình mà nút không hiện, nó sẽ in ra lý do cụ thể ở đây:
             string reason = "";
-            if (isAnimatingAction) reason += "Đang kẹt isAnimatingAction! ";
-            if (hpUI != null && hpUI.isAnimating) reason += "Đang diễn Anim máu! ";
-            if (localActionLock) reason += "Đang dính localActionLock! ";
+            if (isAnimatingAction) reason += "AnimAction ";
+            if (hpUI != null && hpUI.isAnimating) reason += "AnimHP ";
+            if (localActionLock) reason += "LocalLock ";
             
-            if (reason != "") Debug.LogWarning($"<color=red>[UI Lock]</color> Lý do nút không hiện: {reason}");
+            // CHỈ LOG KHI CÓ SỰ THAY ĐỔI: Dùng Time.frameCount để chỉ log 1 giây 1 lần cho đỡ lag
+            if (reason != "" && Time.frameCount % 60 == 0) 
+            {
+                Debug.LogWarning($"<color=red>[UI Lock]</color> Đợi nhả: {reason}");
+            }
         }
 
         // --- HIỆU ỨNG CAMERA SWAY (Giữ nguyên) ---
