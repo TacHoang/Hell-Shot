@@ -2036,6 +2036,9 @@ MonoBehaviour:
     _value: 0
   _hasShotThisTurn:
     _value: 0
+  _finalGunAngle: 0
+  _isAnimatingAction:
+    _value: 0
   rotatingGun: {fileID: 1536149595}
   muzzlePoint: {fileID: 864510289}
   itemsManager: {fileID: 1579761528}
@@ -3708,6 +3711,9 @@ MonoBehaviour:
   tooltipText: {fileID: 962695067}
   _leftItems: 
   _rightItems: 
+  _networkedPendingSlot: -1
+  _networkedPendingFromLeft:
+    _value: 0
 --- !u!4 &1579761529
 Transform:
   m_ObjectHideFlags: 0

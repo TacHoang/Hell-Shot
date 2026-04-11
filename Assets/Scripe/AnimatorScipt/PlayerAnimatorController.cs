@@ -7,14 +7,14 @@ public class PlayerActionController : NetworkBehaviour
     
     [Networked] public PlayerRef PlayerOwner { get; set; }
 
-    // BIẾN MẠNG: Đồng bộ ID vật phẩm (4,5,6). -1 là không cầm gì.
+    // BIẾN MẠNG: Đồng bộ ID vật phẩm. -1 là không cầm gì.
     [Networked, OnChangedRender(nameof(RefreshPropsVisibility))] 
     public int NetworkedPropIndex { get; set; } = -1; 
 
     private int _currentUsingItemID;
 
     [Header("Hand Props Setup")]
-    [Tooltip("KÉO ĐỒ TỪ HIERARCHY VÀO: Element 0: Soda (ID 4), 1: Pill (ID 5), 2: Health (ID 6)")]
+    [Tooltip("THỨ TỰ KÉO ĐỒ VÀO: \nElement 0: Kính lúp (ID 1)\nElement 1: Soda (ID 4)\nElement 2: Pill (ID 5)\nElement 3: Health (ID 6)")]
     public GameObject[] leftProps;
     public GameObject[] rightProps;
 
@@ -42,7 +42,7 @@ public class PlayerActionController : NetworkBehaviour
     {
         HideAllProps();
         
-        // Nếu NetworkedPropIndex = -1, nghĩa là hành động đã kết thúc -> Ẩn đồ và mở khóa
+        // Nếu NetworkedPropIndex = -1 -> Ẩn đồ và mở khóa hành động
         if (NetworkedPropIndex == -1) 
         {
             var itemsManager = FindObjectOfType<ItemsManager>();
@@ -71,22 +71,36 @@ public class PlayerActionController : NetworkBehaviour
         if (_anim == null) return;
         _currentUsingItemID = itemID;
         _anim.SetBool("IsRightSide", isRightSide);
+        
+        // Chạy Trigger theo ID (VD: Use1, Use4, Use5...)
         _anim.SetTrigger("Use" + itemID); 
         
-        if (itemID >= 4) _anim.SetTrigger("DrinkTrigger");
+        // Phân loại hành động
+        if (itemID == 1) 
+        {
+            _anim.SetTrigger("MagnifyTrigger"); // Trigger riêng cho kính lúp
+        }
+        else if (itemID >= 4) 
+        {
+            _anim.SetTrigger("DrinkTrigger");   // Trigger cho các loại đồ uống
+        }
     }
 
     private void HideAllProps()
     {
-        // Chỉ ẩn các object trong danh sách quản lý, không can thiệp vào Bone của Animator
         if (leftProps != null) foreach (var p in leftProps) if (p) p.SetActive(false);
         if (rightProps != null) foreach (var p in rightProps) if (p) p.SetActive(false);
     }
 
     private GameObject GetPropFromID(int id, bool isLeft)
     {
-        int index = id - 4; // ID 4 -> index 0, ID 5 -> index 1...
-        if (index < 0 || index >= 3) return null;
+        int index = -1;
+        
+        // Logic ánh xạ ID sang Index mảng:
+        if (id == 1) index = 0;           // Kính lúp (ID 1) nằm ở Element 0
+        else if (id >= 4) index = id - 3;  // ID 4 -> Idx 1, ID 5 -> Idx 2, ID 6 -> Idx 3
+
+        if (index < 0) return null;
         
         if (isLeft)
             return (leftProps != null && index < leftProps.Length) ? leftProps[index] : null;
@@ -94,14 +108,12 @@ public class PlayerActionController : NetworkBehaviour
             return (rightProps != null && index < rightProps.Length) ? rightProps[index] : null;
     }
 
-    // --- ANIMATION EVENTS (Gọi từ Animation Clips) ---
+    // --- ANIMATION EVENTS ---
 
     public void OnPickupMoment() 
     {
-        // 1. Đồng bộ vật phẩm lên tay (biến mạng)
         if (HasStateAuthority) NetworkedPropIndex = _currentUsingItemID;
 
-        // 2. Lệnh cho tất cả các máy ẩn vật phẩm dưới bàn đi ngay lập tức
         var im = ItemsManager.Instance;
         if (im != null && im.networkedPendingSlot != -1)
         {
@@ -111,11 +123,9 @@ public class PlayerActionController : NetworkBehaviour
 
     public void SwitchPropToRightHand()
     {
-        // CHỐT CHẶN: Nếu Server đã báo cất đồ (-1), không thực hiện chuyển tay để tránh kẹt đồ
         if (NetworkedPropIndex == -1) return; 
 
         bool isRightSide = _anim.GetBool("IsRightSide");
-        // Nếu đang thực hiện animation chuyển từ trái sang phải (IsRightSide đang là false)
         if (!isRightSide)
         {
             GameObject leftP = GetPropFromID(_currentUsingItemID, true);
@@ -125,7 +135,39 @@ public class PlayerActionController : NetworkBehaviour
         }
     }
 
-    public void OnItemEffectMoment() => RPC_ApplyItemEffect(_currentUsingItemID);
+    public void OnItemEffectMoment() 
+    {
+        // RIÊNG KÍNH LÚP: Xử lý bật UI trên kính cho máy của người dùng (Local)
+        if (_currentUsingItemID == 1)// && Object.HasInputAuthority)
+        {
+            HandleMagnifierUILocal();
+        }
+
+        RPC_ApplyItemEffect(_currentUsingItemID);
+    }
+
+    private void HandleMagnifierUILocal()
+    {
+        bool isRightSide = _anim.GetBool("IsRightSide");
+        GameObject prop = GetPropFromID(1, !isRightSide);
+
+        if (prop == null) {
+        Debug.LogError($"[UI Error] Không tìm thấy kính trên tay. RightSide: {isRightSide}");
+        return;
+    }
+        
+        if (prop != null)
+        {
+            // Tìm script UI gắn trên Kính lúp
+            var uiHandler = prop.GetComponentInChildren<MagnifierUIHandler>();
+            if (uiHandler != null)
+            {
+                // Lấy dữ liệu đạn từ GunManager (Giả định hàm trả về true nếu đạn thật)
+                bool isReal = ItemsManager.Instance.gunManager.GetCurrentBulletType();
+                uiHandler.ShowResult(isReal);
+            }
+        }
+    }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_ApplyItemEffect(int itemID)
@@ -137,7 +179,6 @@ public class PlayerActionController : NetworkBehaviour
                 itemsManager.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
 
             itemsManager.RealClearItem(); 
-            Debug.Log($"<color=orange>[Server]</color> Thực thi hiệu ứng và xóa vật phẩm ID {itemID}");
         }
     }
 
@@ -146,15 +187,11 @@ public class PlayerActionController : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_FinishAction()
     {
-        // Reset biến mạng về -1 -> Kích hoạt RefreshPropsVisibility ẩn toàn bộ đồ
         NetworkedPropIndex = -1;
-
         var itemsManager = FindObjectOfType<ItemsManager>();
         if (itemsManager != null && itemsManager.gunManager != null)
         {
             itemsManager.gunManager.isAnimatingAction = false;
         }
-
-        Debug.Log("<color=cyan>[Action]</color> Kết thúc hành động, đã ẩn đồ.");
     }
 }

@@ -213,6 +213,45 @@ public class ItemsManager : NetworkBehaviour
         };
     }
 
-    public void ShowTooltip(int index, bool isLeft) { }
-    public void HideTooltip() { }
+    public void ShowTooltip(int index, bool isLeft)
+    {
+        // 1. Lấy ID vật phẩm từ mảng mạng
+        var targetArray = isLeft ? leftItems : rightItems;
+        int itemID = targetArray[index];
+
+        if (itemID <= 0) return; // Ô trống thì không hiện
+
+        // 2. Bật Panel và cập nhật nội dung chữ
+        if (tooltipPanel != null && tooltipText != null)
+        {
+            tooltipPanel.SetActive(true);
+            tooltipText.text = GetItemDescription(itemID);
+            
+            // (Tùy chọn) Di chuyển Panel theo vị trí chuột
+            tooltipPanel.transform.position = Input.mousePosition + new Vector3(10, 10, 0);
+        }
+    }
+
+    public void HideTooltip()
+    {
+        if (tooltipPanel != null)
+        {
+            tooltipPanel.SetActive(false);
+        }
+    }
+
+    // Hàm phụ để định nghĩa nội dung hướng dẫn
+    private string GetItemDescription(int id)
+    {
+        return id switch
+        {
+            1 => "KÍNH LÚP: Soi viên đạn hiện tại trong nòng súng.",
+            2 => "CƯA: Tăng gấp đôi sát thương cho phát bắn tiếp theo.",
+            3 => "CÒNG TAY: Khóa lượt đi của đối thủ ở vòng kế tiếp.",
+            4 => "SODA: Loại bỏ viên đạn hiện tại ra khỏi súng.",
+            5 => "VIÊN THUỐC: 50% cơ hội hồi 1 máu, 50% cơ hội mất 1 máu.",
+            6 => "THUỐC HỒI MÁU: Hồi phục 1 đơn vị máu.",
+            _ => ""
+        };
+    }
 }

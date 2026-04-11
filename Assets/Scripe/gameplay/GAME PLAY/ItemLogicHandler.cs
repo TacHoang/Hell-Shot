@@ -38,7 +38,11 @@ public class ItemLogicHandler : NetworkBehaviour
         }
     }
 
-    private void UseGlass(PlayerRef user) { gunManager.RPC_ShowGlassResult(user, gunManager.GetCurrentBulletStatus()); }
+// Tìm hàm UseGlass và sửa lại tên hàm gọi
+    private void UseGlass(PlayerRef user) 
+    { 
+        gunManager.RPC_ShowGlassResult(user, gunManager.GetCurrentBulletType()); 
+    }
     private void UseSaw() { gunManager.doubleDamage = true; }
     private void UseCuff() { gunManager.isCuffed = true; }
 

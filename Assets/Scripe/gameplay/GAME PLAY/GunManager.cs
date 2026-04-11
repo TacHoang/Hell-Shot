@@ -390,7 +390,11 @@ public class GunManager : NetworkBehaviour
     }
 
     public bool IsMyTurn() { if (Runner == null || Runner.LocalPlayer == PlayerRef.None) return false; int idx = (Runner.IsServer) ? 0 : 1; return idx == activePlayerIndex; }
-    public bool GetCurrentBulletStatus() { return bulletCount > 0 && bullets[0]; }
+    // Đổi tên từ GetCurrentBulletStatus thành GetCurrentBulletType để khớp với các script khác
+    public bool GetCurrentBulletType() 
+    { 
+        return bulletCount > 0 && bullets[0]; 
+    }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)] public void RPC_PlayRoundEffect(int roundNumber) {
         if (roundPanel == null || roundCanvasGroup == null) return;
