@@ -8,9 +8,12 @@ public class MagnifierUIHandler : MonoBehaviour
 
     public void ShowResult(bool isReal)
     {
-        HideUI(); // Đảm bảo reset trước khi hiện
+        HideUI(); 
         if (isReal) realBulletIcon.SetActive(true);
         else fakeBulletIcon.SetActive(true);
+
+        // Tự động ẩn sau 2 giây cho đỡ rác màn hình
+        Invoke(nameof(HideUI), 2.0f);
     }
 
     public void HideUI()

@@ -5,18 +5,27 @@ public class PlayerActionController : NetworkBehaviour
 {
     private Animator _anim;
     
-    [Networked] public PlayerRef PlayerOwner { get; set; }
+    [Header("UI References")]
+    public MagnifierUIHandler magnifierUI;
 
-    // BIẾN MẠNG: Đồng bộ ID vật phẩm. -1 là không cầm gì.
+    [Header("Networked Data")]
+    [Networked] public PlayerRef PlayerOwner { get; set; }
+    [Networked] public int PlayerIndex { get; set; } 
     [Networked, OnChangedRender(nameof(RefreshPropsVisibility))] 
     public int NetworkedPropIndex { get; set; } = -1; 
+    
+    [Networked, OnChangedRender(nameof(OnGunInHandChanged))]
+    public NetworkBool IsHoldingGunVisual { get; set; }
 
-    private int _currentUsingItemID;
+    [Header("Special Visuals")]
+    public GameObject handcuffedModel; 
+    public GameObject gunInHandProp;   
 
     [Header("Hand Props Setup")]
-    [Tooltip("THỨ TỰ KÉO ĐỒ VÀO: \nElement 0: Kính lúp (ID 1)\nElement 1: Soda (ID 4)\nElement 2: Pill (ID 5)\nElement 3: Health (ID 6)")]
-    public GameObject[] leftProps;
-    public GameObject[] rightProps;
+    public GameObject[] leftProps;  
+    public GameObject[] rightProps; 
+
+    private int _currentUsingItemID;
 
     void Awake() 
     {
@@ -27,10 +36,14 @@ public class PlayerActionController : NetworkBehaviour
 
     public override void Spawned()
     {
-        if (Object.HasInputAuthority) RPC_SetOwner(Runner.LocalPlayer);
+        if (Object.HasInputAuthority) 
+        {
+            RPC_SetOwner(Runner.LocalPlayer);
+            PlayerIndex = Runner.IsServer ? 0 : 1;
+        }
         
-        // Đảm bảo ItemsManager đã tồn tại trước khi đăng ký
-        if(ItemsManager.Instance != null) ItemsManager.RegisterPlayerController(this);
+        if(ItemsManager.Instance != null) 
+            ItemsManager.RegisterPlayerController(this);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -38,52 +51,36 @@ public class PlayerActionController : NetworkBehaviour
 
     public void SetCurrentItem(int id) => _currentUsingItemID = id;
 
+    // --- LOGIC HIỂN THỊ VẬT PHẨM ---
+
     private void RefreshPropsVisibility()
     {
         HideAllProps();
-        
-        // Nếu NetworkedPropIndex = -1 -> Ẩn đồ và mở khóa hành động
-        if (NetworkedPropIndex == -1) 
-        {
-            var itemsManager = FindObjectOfType<ItemsManager>();
-            if (itemsManager != null && itemsManager.gunManager != null)
-            {
-                itemsManager.gunManager.ResetActionLock();
-                if (itemsManager.gunManager.HasStateAuthority)
-                {
-                    itemsManager.gunManager.isAnimatingAction = false;
-                }
-            }
-            return;
-        }
+        if (NetworkedPropIndex <= 0) return; 
 
-        // Kiểm tra xem đang dùng tay nào dựa trên Animator
+        // Lúc mới nhặt: Hiện ở tay theo hướng nhặt (isRightSide)
         bool isRightSide = _anim.GetBool("IsRightSide");
-        
-        // Bật đúng món đồ trên tay tương ứng
         GameObject prop = GetPropFromID(NetworkedPropIndex, !isRightSide);
         if (prop != null) prop.SetActive(true);
     }
 
-    [Rpc(RpcSources.All, RpcTargets.All)]
-    public void RPC_PlayPickupAction(int itemID, bool isRightSide)
+    private GameObject GetPropFromID(int id, bool isLeft)
     {
-        if (_anim == null) return;
-        _currentUsingItemID = itemID;
-        _anim.SetBool("IsRightSide", isRightSide);
-        
-        // Chạy Trigger theo ID (VD: Use1, Use4, Use5...)
-        _anim.SetTrigger("Use" + itemID); 
-        
-        // Phân loại hành động
-        if (itemID == 1) 
+        int index = id - 1; 
+        if (index < 0) return null;
+
+        // ÉP BUỘC: Kính (1) và Cưa (2) luôn bên tay PHẢI
+        if (id == 1 || id == 2)
         {
-            _anim.SetTrigger("MagnifyTrigger"); // Trigger riêng cho kính lúp
+            if (rightProps != null && index < rightProps.Length) return rightProps[index];
+            return null;
         }
-        else if (itemID >= 4) 
-        {
-            _anim.SetTrigger("DrinkTrigger");   // Trigger cho các loại đồ uống
-        }
+
+        // Các món khác (Coca, Thuốc...)
+        if (isLeft)
+            return (leftProps != null && index < leftProps.Length) ? leftProps[index] : null;
+        else
+            return (rightProps != null && index < rightProps.Length) ? rightProps[index] : null;
     }
 
     private void HideAllProps()
@@ -92,106 +89,107 @@ public class PlayerActionController : NetworkBehaviour
         if (rightProps != null) foreach (var p in rightProps) if (p) p.SetActive(false);
     }
 
-    private GameObject GetPropFromID(int id, bool isLeft)
-    {
-        int index = -1;
-        
-        // Logic ánh xạ ID sang Index mảng:
-        if (id == 1) index = 0;           // Kính lúp (ID 1) nằm ở Element 0
-        else if (id >= 4) index = id - 3;  // ID 4 -> Idx 1, ID 5 -> Idx 2, ID 6 -> Idx 3
+    // --- ANIMATION EVENTS (DÙNG ĐỂ FIX LỖI CỦA ÔNG) ---
 
-        if (index < 0) return null;
-        
-        if (isLeft)
-            return (leftProps != null && index < leftProps.Length) ? leftProps[index] : null;
-        else
-            return (rightProps != null && index < rightProps.Length) ? rightProps[index] : null;
-    }
-
-    // --- ANIMATION EVENTS ---
-
-    public void OnPickupMoment() 
-    {
-        if (HasStateAuthority) NetworkedPropIndex = _currentUsingItemID;
-
-        var im = ItemsManager.Instance;
-        if (im != null && im.networkedPendingSlot != -1)
-        {
-            im.RPC_HideWorldItemVisual(im.networkedPendingFromLeft, im.networkedPendingSlot);
-        }
-    }
-
+    // Gắn Event này vào lúc bắt đầu Animation "Uống/Dùng" (sau khi nhặt xong)
+    // Nó sẽ tắt đồ bên tay trái và bật đồ bên tay phải lên để diễn cảnh uống
     public void SwitchPropToRightHand()
     {
-        if (NetworkedPropIndex == -1) return; 
+        if (NetworkedPropIndex <= 0) return;
 
-        bool isRightSide = _anim.GetBool("IsRightSide");
-        if (!isRightSide)
-        {
-            GameObject leftP = GetPropFromID(_currentUsingItemID, true);
-            GameObject rightP = GetPropFromID(_currentUsingItemID, false);
-            if (leftP) leftP.SetActive(false);
-            if (rightP) rightP.SetActive(true);
-        }
+        // Tắt hết
+        HideAllProps();
+
+        // Bật đúng món đó ở bên tay PHẢI (isLeft = false)
+        GameObject rightProp = GetPropFromID(NetworkedPropIndex, false);
+        if (rightProp != null) rightProp.SetActive(true);
     }
 
-    public void OnItemEffectMoment() 
+    // --- ĐỒNG BỘ CẦM SÚNG ---
+
+    private void OnGunInHandChanged()
     {
-        // RIÊNG KÍNH LÚP: Xử lý bật UI trên kính cho máy của người dùng (Local)
-        if (_currentUsingItemID == 1)// && Object.HasInputAuthority)
+        if (gunInHandProp != null) gunInHandProp.SetActive(IsHoldingGunVisual);
+        if (ItemsManager.Instance?.gunManager != null)
         {
-            HandleMagnifierUILocal();
+            var realGun = ItemsManager.Instance.gunManager.rotatingGun;
+            if (realGun != null) realGun.SetActive(!IsHoldingGunVisual);
         }
-
-        RPC_ApplyItemEffect(_currentUsingItemID);
     }
 
-    private void HandleMagnifierUILocal()
+    // --- ACTIONS ---
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_PlayPickupAction(int itemID, bool isRightSide)
     {
-        bool isRightSide = _anim.GetBool("IsRightSide");
-        GameObject prop = GetPropFromID(1, !isRightSide);
+        if (_anim == null) return;
+        _currentUsingItemID = itemID;
+        _anim.SetBool("IsRightSide", isRightSide);
+        _anim.SetTrigger("Use" + itemID); 
 
-        if (prop == null) {
-        Debug.LogError($"[UI Error] Không tìm thấy kính trên tay. RightSide: {isRightSide}");
-        return;
+        if (itemID == 1) _anim.SetTrigger("MagnifyTrigger");
     }
-        
-        if (prop != null)
-        {
-            // Tìm script UI gắn trên Kính lúp
-            var uiHandler = prop.GetComponentInChildren<MagnifierUIHandler>();
-            if (uiHandler != null)
-            {
-                // Lấy dữ liệu đạn từ GunManager (Giả định hàm trả về true nếu đạn thật)
-                bool isReal = ItemsManager.Instance.gunManager.GetCurrentBulletType();
-                uiHandler.ShowResult(isReal);
-            }
-        }
-    }
-
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_ApplyItemEffect(int itemID)
-    {
-        var itemsManager = FindObjectOfType<ItemsManager>();
-        if (itemsManager != null)
-        {
-            if (itemsManager.itemLogic != null)
-                itemsManager.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
-
-            itemsManager.RealClearItem(); 
-        }
-    }
-
-    public void OnActionFinished() => RPC_FinishAction();
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_FinishAction()
     {
         NetworkedPropIndex = -1;
-        var itemsManager = FindObjectOfType<ItemsManager>();
-        if (itemsManager != null && itemsManager.gunManager != null)
+        IsHoldingGunVisual = false; 
+
+        if (ItemsManager.Instance != null)
         {
-            itemsManager.gunManager.isAnimatingAction = false;
+            ItemsManager.Instance.RealClearItem();
+            if (ItemsManager.Instance.gunManager != null)
+            {
+                var gm = ItemsManager.Instance.gunManager;
+                gm.isAnimatingAction = false;
+                gm.hasShotThisTurn = false;
+                gm.UnlockLocalAction();
+            }
         }
+    }
+
+    public void OnPickupMoment() 
+    {
+        if (HasStateAuthority) NetworkedPropIndex = _currentUsingItemID;
+        var im = ItemsManager.Instance;
+        if (im != null && im.networkedPendingSlot != -1)
+            im.RPC_HideWorldItemVisual(im.networkedPendingFromLeft, im.networkedPendingSlot);
+    }
+
+    public void AnimEvent_StartSawing()
+    {
+        if (HasStateAuthority && _currentUsingItemID == 2) 
+            IsHoldingGunVisual = true;
+    }
+
+    public void OnActionFinished() => RPC_FinishAction();
+    public void OnItemEffectMoment() => RPC_ApplyItemEffect(_currentUsingItemID);
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_ApplyItemEffect(int itemID)
+    {
+        if (ItemsManager.Instance?.itemLogic != null)
+            ItemsManager.Instance.itemLogic.ExecuteItemLogic(itemID, PlayerOwner, false);
+    }
+
+    public void OnMagnifierCheck()
+    {
+        if (!Object.HasInputAuthority) return;
+        if (ItemsManager.Instance?.gunManager != null)
+        {
+            bool isReal = ItemsManager.Instance.gunManager.GetCurrentBulletType(); 
+            if (magnifierUI != null) magnifierUI.ShowResult(isReal);
+        }
+    }
+
+    public override void Render()
+    {
+        if (ItemsManager.Instance?.gunManager == null) return;
+        var gm = ItemsManager.Instance.gunManager;
+        bool amITheVictim = gm.isCuffed && gm.cuffedPlayerIndex == PlayerIndex;
+        if (handcuffedModel != null && handcuffedModel.activeSelf != amITheVictim)
+            handcuffedModel.SetActive(amITheVictim);
+        if (_anim != null) _anim.SetBool("IsHandcuffed", amITheVictim); 
     }
 }

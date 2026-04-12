@@ -50,6 +50,15 @@ public class ItemsManager : NetworkBehaviour
         else if (Instance != this) Destroy(gameObject);
     }
 
+    public void ResetItemCache()
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            lastLeftItems[i] = -1;
+            lastRightItems[i] = -1;
+        }
+    }
+
     private void OnDestroy()
     {
         playerControllers.Clear();
@@ -140,13 +149,18 @@ public class ItemsManager : NetworkBehaviour
         if (gunManager.isWaitingNextRound || gunManager.hasShotThisTurn || gunManager.isAnimatingAction) return;
 
         var targetArray = fromLeft ? leftItems : rightItems;
-        int itemID = targetArray[slotIndex];
+
+        // 🔥 dùng .Get cho chắc
+        int itemID = targetArray.Get(slotIndex);
 
         if (itemID > 0)
         {
             gunManager.isAnimatingAction = true;
 
-            // LƯU BIẾN MẠNG: Để tí nữa Animation Event biết slot nào mà ẩn
+            // 🔥 clear NGAY data (fix bug slot không add round sau)
+            
+
+            // 🔥 lưu lại để animation xử lý visual
             networkedPendingSlot = slotIndex;
             networkedPendingFromLeft = fromLeft;
 
@@ -156,11 +170,13 @@ public class ItemsManager : NetworkBehaviour
             if (controller != null)
             {
                 controller.SetCurrentItem(itemID);
+
                 bool isRightSide = (slotIndex == 2 || slotIndex == 3 || slotIndex == 6 || slotIndex == 7);
                 controller.RPC_PlayPickupAction(itemID, isRightSide);
             }
             else
             {
+                // ❗ fallback nếu mất controller
                 gunManager.isAnimatingAction = false; 
             }
         }
