@@ -58,6 +58,7 @@ public class GunManager : NetworkBehaviour
     private bool isWaitingTextVisible = false;
     private Coroutine _healthAnimCoroutine;
     private bool isStartingNextRound = false;
+    private bool isGameOver = false;
 
     [Header("Mouse Sway Settings")]
     public float swayAmount = 2.0f; 
@@ -65,6 +66,10 @@ public class GunManager : NetworkBehaviour
     private Quaternion baseRotation; 
     private bool canSway = false; 
     private float breatheTimer; 
+
+    [Header("Game Over UI")]
+    public GameObject gameOverPanel;
+    public TextMeshProUGUI resultText;
 
     public void UnlockLocalAction()
     {
@@ -409,6 +414,7 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
 }
     void Update() 
     {
+         if (isGameOver) return; // 🔥 CHẶN HẾT UI + logic
         // 1. Kiểm tra an toàn
         if (Object == null || Runner == null) return;
         
@@ -545,7 +551,44 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] public void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal) { Debug.Log($"<color={(isReal ? "red" : "white")}>[SOI ĐẠN] Kết quả: {(isReal ? "ĐẠN THẬT" : "ĐẠN GIẢ")}</color>"); }
-    void CheckGameOver() { if (player1HP <= 0) Debug.Log("PLAYER 2 WIN"); if (player2HP <= 0) Debug.Log("PLAYER 1 WIN"); }
+    void CheckGameOver() 
+    {
+        if (!HasStateAuthority || isGameOver) return;
+
+        if (player1HP <= 0 || player2HP <= 0)
+        {
+            isGameOver = true;
+
+            // 🔥 CHẶN TOÀN BỘ GAME
+            isWaitingNextRound = true;
+            hasShotThisTurn = true;
+            localActionLock = true;
+
+            int winner = (player1HP <= 0) ? 1 : 0;
+            RPC_ShowGameOver(winner);
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_ShowGameOver(int winnerIndex)
+    {
+        if (gameOverPanel == null || resultText == null) return;
+
+        gameOverPanel.SetActive(true);
+
+        int myIndex = (Runner.IsServer) ? 0 : 1;
+
+        if (myIndex == winnerIndex)
+        {
+            resultText.text = "BẠN THẮNG";
+            resultText.color = Color.green;
+        }
+        else
+        {
+            resultText.text = "BẠN THUA";
+            resultText.color = Color.red;
+        }
+    }
     private void OnDestroy() { DOTween.KillAll(); }
 
     public void EjectBullet() 
@@ -559,5 +602,35 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
         // Xóa viên cuối
         bullets.Set(bulletCount - 1, false);
         bulletCount--;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_ExitGame()
+    {
+        StartCoroutine(ExitRoutine());
+    }
+
+    IEnumerator ExitRoutine()
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        if (Runner != null)
+        {
+            Runner.Shutdown(); // 🔥 tắt network đúng cách
+        }
+
+        UnityEngine.SceneManagement.SceneManager.LoadScene("menu"); // nhớ đổi tên scene
+    }
+
+    public void OnExitButton()
+    {
+        if (Runner.IsServer)
+        {
+            RPC_ExitGame(); // host → gọi cho tất cả
+        }
+        else
+        {
+            StartCoroutine(ExitRoutine()); // client → tự thoát
+        }
     }
 }
