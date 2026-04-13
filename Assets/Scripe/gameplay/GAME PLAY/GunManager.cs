@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections;
 using TMPro;
 using DG.Tweening;
+using System.Linq;
 
 public class GunManager : NetworkBehaviour
 {
@@ -164,6 +165,16 @@ public void RPC_Shoot(bool shootSelf)
 { 
     if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
     
+    // Tìm Player đang thực hiện lượt này
+    var allPlayers = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None);
+    var actingPlayer = allPlayers.FirstOrDefault(p => p.PlayerIndex == activePlayerIndex);
+
+    if (actingPlayer != null)
+    {
+        // GỌI Ở ĐÂY: Ra lệnh cho nhân vật bắt đầu diễn kịch bản nhặt súng và bắn
+        actingPlayer.RPC_StartShootingSequence(shootSelf);
+    }
+
     hasShotThisTurn = true; 
     bool isReal = bullets[0]; 
     bool isLast = (bulletCount == 1); 
