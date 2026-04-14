@@ -63,15 +63,17 @@ public class GunManager : NetworkBehaviour
     private bool isWaitingTextVisible = false;
     private Coroutine _healthAnimCoroutine;
     private bool isStartingNextRound = false;
-    // Tìm dòng 53, đổi tên biến thành:
-    private float _lastEjectTime;
-
+    private bool isGameOver = false;
     [Header("Mouse Sway Settings")]
     public float swayAmount = 2.0f; 
     public float swaySmoothing = 5.0f; 
     private Quaternion baseRotation; 
     private bool canSway = false; 
     private float breatheTimer; 
+
+    [Header("Game Over UI")]
+    public GameObject gameOverPanel;
+    public TextMeshProUGUI resultText;
 
     public void UnlockLocalAction()
     {
@@ -502,6 +504,7 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
     }
     void Update() 
     {
+         if (isGameOver) return; // 🔥 CHẶN HẾT UI + logic
         // 1. Kiểm tra an toàn
         if (Object == null || Runner == null) return;
         
@@ -663,4 +666,33 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
         bulletCount--;
     }
 
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_ExitGame()
+    {
+        StartCoroutine(ExitRoutine());
+    }
+
+    IEnumerator ExitRoutine()
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        if (Runner != null)
+        {
+            Runner.Shutdown(); // 🔥 tắt network đúng cách
+        }
+
+        UnityEngine.SceneManagement.SceneManager.LoadScene("menu"); // nhớ đổi tên scene
+    }
+
+    public void OnExitButton()
+    {
+        if (Runner.IsServer)
+        {
+            RPC_ExitGame(); // host → gọi cho tất cả
+        }
+        else
+        {
+            StartCoroutine(ExitRoutine()); // client → tự thoát
+        }
+    }
 }
