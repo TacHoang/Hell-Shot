@@ -6,8 +6,6 @@ public class GameSettings : MonoBehaviour
     public static GameSettings Instance;
 
     public int resolutionIndex = 0;
-    public bool isFullscreen = true;
-
     public Resolution[] resolutions;
 
     void Awake()
@@ -45,26 +43,24 @@ public class GameSettings : MonoBehaviour
         resolutions = unique.ToArray();
     }
 
-    public void ApplySettings()
-    {
-        if (resolutionIndex < 0 || resolutionIndex >= resolutions.Length)
-            resolutionIndex = resolutions.Length - 1;
+public void ApplySettings()
+{
+    if (resolutionIndex < 0 || resolutionIndex >= resolutions.Length)
+        resolutionIndex = resolutions.Length - 1;
 
-        Resolution res = resolutions[resolutionIndex];
+    Resolution res = resolutions[resolutionIndex];
 
-        Screen.SetResolution(
-            res.width,
-            res.height,
-            isFullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed
-        );
+    // 👉 Force windowed
+    Screen.fullScreen = false;
+    Screen.fullScreenMode = FullScreenMode.Windowed;
 
-        Screen.fullScreen = isFullscreen; // 👈 đảm bảo sync
-    }
+    // 👉 Set resolution
+    Screen.SetResolution(res.width, res.height, FullScreenMode.Windowed);
+}
 
     public void SaveSettings()
     {
         PlayerPrefs.SetInt("ResolutionIndex", resolutionIndex);
-        PlayerPrefs.SetInt("Fullscreen", isFullscreen ? 1 : 0);
         PlayerPrefs.Save();
     }
 
@@ -72,7 +68,5 @@ public class GameSettings : MonoBehaviour
     {
         resolutionIndex = PlayerPrefs.GetInt("ResolutionIndex", resolutions.Length - 1);
         resolutionIndex = Mathf.Clamp(resolutionIndex, 0, resolutions.Length - 1);
-
-        isFullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
     }
 }

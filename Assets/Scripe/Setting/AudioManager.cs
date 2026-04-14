@@ -5,11 +5,11 @@ public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance;
 
-    List<AudioSource> musicSources = new();
-    List<AudioSource> sfxSources = new();
+    public float musicVolume = 1f;
+    public float sfxVolume = 1f;
 
-    float musicVolume = 1f;
-    float sfxVolume = 1f;
+    private List<AudioSource> musicSources = new List<AudioSource>();
+    private List<AudioSource> sfxSources = new List<AudioSource>();
 
     void Awake()
     {
@@ -19,54 +19,67 @@ public class AudioManager : MonoBehaviour
             DontDestroyOnLoad(gameObject);
             LoadVolume();
         }
-        else Destroy(gameObject);
-    }
-
-    public void RegisterMusic(AudioSource s)
-    {
-        if (!musicSources.Contains(s))
+        else
         {
-            musicSources.Add(s);
-            s.volume = musicVolume;
+            Destroy(gameObject);
         }
     }
 
-    public void RegisterSFX(AudioSource s)
+    // 🔥 REGISTER
+    public void RegisterMusic(AudioSource src)
     {
-        if (!sfxSources.Contains(s))
+        if (!musicSources.Contains(src))
         {
-            sfxSources.Add(s);
-            s.volume = sfxVolume;
+            musicSources.Add(src);
+            src.volume = musicVolume;
         }
     }
 
+    public void RegisterSFX(AudioSource src)
+    {
+        if (!sfxSources.Contains(src))
+        {
+            sfxSources.Add(src);
+            src.volume = sfxVolume;
+        }
+    }
+
+    // 🔥 APPLY ALL
     public void SetMusicVolume(float v)
     {
         musicVolume = v;
+
         foreach (var s in musicSources)
-            if (s) s.volume = v;
+        {
+            if (s != null)
+                s.volume = musicVolume;
+        }
     }
 
     public void SetSFXVolume(float v)
     {
         sfxVolume = v;
+
         foreach (var s in sfxSources)
-            if (s) s.volume = v;
+        {
+            if (s != null)
+                s.volume = sfxVolume;
+        }
     }
+
+    public float GetMusicVolume() => musicVolume;
+    public float GetSFXVolume() => sfxVolume;
 
     public void SaveVolume()
     {
-        PlayerPrefs.SetFloat("MusicVolume", musicVolume);
-        PlayerPrefs.SetFloat("SFXVolume", sfxVolume);
+        PlayerPrefs.SetFloat("MusicVol", musicVolume);
+        PlayerPrefs.SetFloat("SFXVol", sfxVolume);
         PlayerPrefs.Save();
     }
 
     void LoadVolume()
     {
-        musicVolume = PlayerPrefs.GetFloat("MusicVolume", 1f);
-        sfxVolume = PlayerPrefs.GetFloat("SFXVolume", 1f);
+        musicVolume = PlayerPrefs.GetFloat("MusicVol", 1f);
+        sfxVolume = PlayerPrefs.GetFloat("SFXVol", 1f);
     }
-
-    public float GetMusicVolume() => musicVolume;
-    public float GetSFXVolume() => sfxVolume;
 }

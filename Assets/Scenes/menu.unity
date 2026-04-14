@@ -350,6 +350,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: AudioManager
       objectReference: {fileID: 0}
+    - target: {fileID: 6944480597796959344, guid: ea19b333b51acbb45ac4e3438792c8b5, type: 3}
+      propertyPath: sfxList.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6944480597796959344, guid: ea19b333b51acbb45ac4e3438792c8b5, type: 3}
+      propertyPath: sfxList.Array.data[0].key
+      value: click
+      objectReference: {fileID: 0}
+    - target: {fileID: 6944480597796959344, guid: ea19b333b51acbb45ac4e3438792c8b5, type: 3}
+      propertyPath: sfxList.Array.data[0].clip
+      value: 
+      objectReference: {fileID: 8300000, guid: 55dd1a4f64952674faaaad4c1c939414, type: 3}
     - target: {fileID: 7116848315048119707, guid: ea19b333b51acbb45ac4e3438792c8b5, type: 3}
       propertyPath: m_LocalPosition.x
       value: 993.32886
@@ -2727,7 +2739,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: ConFirm
+  m_text: Confirm
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5302535af1044152a457ed104f1f4b91, type: 2}
   m_sharedMaterial: {fileID: 2164040, guid: 5302535af1044152a457ed104f1f4b91, type: 2}

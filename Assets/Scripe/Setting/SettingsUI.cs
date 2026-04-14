@@ -6,36 +6,33 @@ using System.Collections.Generic;
 public class SettingsUI : MonoBehaviour
 {
     [Header("UI Root")]
-    public GameObject settingsCanvas; // 👈 panel cần bật/tắt
+    public GameObject settingsCanvas;
 
     [Header("UI Components")]
     public TMP_Dropdown resolutionDropdown;
-    public Toggle fullscreenToggle;
     public Slider musicSlider;
     public Slider sfxSlider;
 
     int tempRes;
-    bool tempFull;
 
     void Start()
     {
-        // 👇 đảm bảo luôn tắt khi start
         settingsCanvas.SetActive(false);
 
         SetupDropdown();
         LoadUI();
     }
 
-void Update()
-{
-    if (Input.GetKeyDown(KeyCode.Escape))
+    void Update()
     {
-        if (settingsCanvas.activeSelf)
-            CloseSettings();
-        else
-            OpenSettings();
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (settingsCanvas.activeSelf)
+                CloseSettings();
+            else
+                OpenSettings();
+        }
     }
-}
 
     void SetupDropdown()
     {
@@ -51,35 +48,25 @@ void Update()
         resolutionDropdown.AddOptions(options);
     }
 
-public void OpenSettings()
-{
-    settingsCanvas.SetActive(true);
-    LoadUI();
+    public void OpenSettings()
+    {
+        settingsCanvas.SetActive(true);
+        LoadUI();
+    }
 
-
-
-
-}
-
-public void CloseSettings()
-{
-    settingsCanvas.SetActive(false);
-
-
-
-}
+    public void CloseSettings()
+    {
+        settingsCanvas.SetActive(false);
+    }
 
     void LoadUI()
     {
         var gs = GameSettings.Instance;
 
-        fullscreenToggle.isOn = gs.isFullscreen;
-
         resolutionDropdown.value = gs.resolutionIndex;
         resolutionDropdown.RefreshShownValue();
 
         tempRes = gs.resolutionIndex;
-        tempFull = gs.isFullscreen;
 
         musicSlider.value = AudioManager.Instance.GetMusicVolume();
         sfxSlider.value = AudioManager.Instance.GetSFXVolume();
@@ -101,17 +88,11 @@ public void CloseSettings()
         UISound.Instance.PlayClick();
     }
 
-    public void OnFullscreenChanged(bool b)
-    {
-        tempFull = b;
-    }
-
     public void Apply()
     {
         var gs = GameSettings.Instance;
 
         gs.resolutionIndex = tempRes;
-        gs.isFullscreen = tempFull;
 
         gs.ApplySettings();
         gs.SaveSettings();
