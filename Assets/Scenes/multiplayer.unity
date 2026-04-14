@@ -2167,10 +2167,15 @@ MonoBehaviour:
   blankBulletPrefab: {fileID: 9220218082160689290, guid: 5626823ce4a7a1045b892ca12076162d, type: 3}
   bulletSpawnPoint: {fileID: 15625578}
   bulletTablePoint: {fileID: 1443835955}
+  bulletSpawnPointt: {fileID: 1112409307}
+  ejectForce: 6
+  upwardForce: 2.5
+  spinForce: 15
   gameOverCanvas: {fileID: 1911895656}
   resultText: {fileID: 1479248498}
   swayAmount: 2
   swaySmoothing: 3
+  allPlayers: []
 --- !u!1 &802338734
 GameObject:
   m_ObjectHideFlags: 0
@@ -3059,6 +3064,37 @@ MonoBehaviour:
   scaleMultiplier: 1.2
   animationDuration: 0.2
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!1 &1112409306
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1112409307}
+  m_Layer: 0
+  m_Name: SpawnPoint (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1112409307
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1112409306}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.038, y: 0.815, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1688885286}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1149035588
 GameObject:
   m_ObjectHideFlags: 0
@@ -4804,6 +4840,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 15625578}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1112409307}
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: be2efc85cbf07a2408ec67afc2c9697a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1443835955}
