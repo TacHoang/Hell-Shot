@@ -53,6 +53,10 @@ public class GunManager : NetworkBehaviour
     public Transform bulletSpawnPoint;   // Điểm trên cao để đạn rơi xuống
     public Transform bulletTablePoint;   // Điểm tập kết trên bàn (có thể là một hàng ngang)
 
+    [Header("Game Over UI")]
+    public GameObject gameOverCanvas;
+    public TextMeshProUGUI resultText;
+
     // --- LOCAL CONTROL ---
     private bool localActionLock = false; 
     private bool isShotCanvasVisible = false;
@@ -590,7 +594,55 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] public void RPC_ShowGlassResult([RpcTarget] PlayerRef target, bool isReal) { Debug.Log($"<color={(isReal ? "red" : "white")}>[SOI ĐẠN] Kết quả: {(isReal ? "ĐẠN THẬT" : "ĐẠN GIẢ")}</color>"); }
-    void CheckGameOver() { if (player1HP <= 0) Debug.Log("PLAYER 2 WIN"); if (player2HP <= 0) Debug.Log("PLAYER 1 WIN"); }
+    void CheckGameOver() 
+    { 
+        if (!HasStateAuthority) return;
+
+        if (player1HP <= 0)
+        {
+            RPC_ShowGameOver(1); // player2 thắng
+        }
+        else if (player2HP <= 0)
+        {
+            RPC_ShowGameOver(0); // player1 thắng
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_ShowGameOver(int winnerIndex)
+    {
+        if (gameOverCanvas == null) return;
+
+        int myIndex = (Runner.IsServer) ? 0 : 1;
+
+        if (winnerIndex == myIndex)
+            resultText.text = "BẠN THẮNG";
+        else
+            resultText.text = "BẠN THUA";
+
+        // 🔥 BẬT UI
+        gameOverCanvas.SetActive(true);
+
+        // 🔥 LẤY RECT
+        RectTransform rect = gameOverCanvas.GetComponent<RectTransform>();
+
+        // 🔥 RESET TRẠNG THÁI
+        rect.DOKill();
+        gameOverCanvas.transform.DOKill();
+
+        // 🔥 BẮT ĐẦU TỪ NGOÀI MÀN HÌNH (TRÊN)
+        rect.anchoredPosition = new Vector2(0, Screen.height);
+        gameOverCanvas.transform.localScale = Vector3.zero;
+
+        // 🔥 ANIMATION BAY XUỐNG
+        rect.DOAnchorPos(Vector2.zero, 0.6f).SetEase(Ease.OutBack);
+
+        // 🔥 SCALE POP
+        gameOverCanvas.transform.DOScale(1f, 0.5f).SetEase(Ease.OutBack);
+
+        // 🔥 RUNG NHẸ CHO NGẦU
+        rect.DOShakeAnchorPos(0.3f, 20f).SetDelay(0.6f);
+    }
     private void OnDestroy() { DOTween.KillAll(); }
 
     public void EjectBullet() 
