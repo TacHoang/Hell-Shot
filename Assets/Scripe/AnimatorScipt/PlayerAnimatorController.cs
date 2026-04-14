@@ -97,14 +97,14 @@ public class PlayerActionController : NetworkBehaviour
     private void OnGunInHandChanged()
     {
         // Hiện súng trên tay nhân vật (Súng này nằm ở xương tay phải)
-        if (gunInHandProp != null) gunInHandProp.SetActive(IsHoldingGunVisual);
+        /*if (gunInHandProp != null) gunInHandProp.SetActive(IsHoldingGunVisual);
 
         // Ẩn/Hiện cây súng xoay giữa bàn
         if (ItemsManager.Instance?.gunManager != null)
         {
             var realGun = ItemsManager.Instance.gunManager.rotatingGun;
             if (realGun != null) realGun.SetActive(!IsHoldingGunVisual);
-        }
+        }*/
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
@@ -190,7 +190,7 @@ public class PlayerActionController : NetworkBehaviour
         else _anim.SetTrigger("ShotYou");
         
         // Bật súng lên tay ngay khi bắt đầu diễn cảnh bắn
-        IsHoldingGunVisual = true; 
+       // IsHoldingGunVisual = true; 
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
@@ -202,7 +202,7 @@ public class PlayerActionController : NetworkBehaviour
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     public void RPC_EndShooting()
     {
-        IsHoldingGunVisual = false; 
+       // IsHoldingGunVisual = false; 
         _anim.SetTrigger("BackToSit"); 
     }
 
