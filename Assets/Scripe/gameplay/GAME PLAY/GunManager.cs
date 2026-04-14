@@ -70,10 +70,8 @@ public class GunManager : NetworkBehaviour
     private Quaternion baseRotation; 
     private bool canSway = false; 
     private float breatheTimer; 
+    private float _lastEjectTime;
 
-    [Header("Game Over UI")]
-    public GameObject gameOverPanel;
-    public TextMeshProUGUI resultText;
 
     public void UnlockLocalAction()
     {
