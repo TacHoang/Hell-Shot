@@ -17,10 +17,14 @@ public class PlayerActionController : NetworkBehaviour
     
     [Networked, OnChangedRender(nameof(OnGunInHandChanged))]
     public NetworkBool IsHoldingGunVisual { get; set; }
+    
+    [Networked, OnChangedRender(nameof(OnGunInLeftHandChanged))]
+    public NetworkBool IsHoldingGunInLeftHand { get; set; }
 
     [Header("Special Visuals")]
     public GameObject handcuffedModel; 
     public GameObject gunInHandProp;   
+    public GameObject gunInLeftHandProp; // THÊM CÁI NÀY: Súng tay trái (khi cưa)
 
     [Header("Hand Props Setup")]
     public GameObject[] leftProps;  
@@ -45,6 +49,22 @@ public class PlayerActionController : NetworkBehaviour
         
         if(ItemsManager.Instance != null) 
             ItemsManager.RegisterPlayerController(this);
+
+        var gm = FindFirstObjectByType<GunManager>();
+        if (gm != null) gm.RegisterPlayer(this);
+    }
+
+    // Hàm thực hiện diễn cảnh té
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_PlayFaint(bool isSelfShot)
+    {
+        if (_anim == null) return;
+        
+        // Ép thông số về trạng thái chuẩn trước khi diễn cảnh té
+        _anim.SetInteger("ActionID", 0); 
+        
+        // Gọi đúng tên Trigger ông đã đặt trong Animator
+        _anim.SetTrigger(isSelfShot ? "FireMy" : "YouFireMe");
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -94,17 +114,38 @@ public class PlayerActionController : NetworkBehaviour
     }
 
     // --- ĐỒNG BỘ CẦM SÚNG (Đã fix tay phải) ---
+    // --- ĐỒNG BỘ CẦM SÚNG TAY TRÁI VÀ ẨN SÚNG TRÊN BÀN ---
     private void OnGunInHandChanged()
     {
-        // Hiện súng trên tay nhân vật (Súng này nằm ở xương tay phải)
-        /*if (gunInHandProp != null) gunInHandProp.SetActive(IsHoldingGunVisual);
+        // Bật/tắt súng ở tay PHẢI (dùng để bắn)
+        if (gunInHandProp != null) 
+            gunInHandProp.SetActive(IsHoldingGunVisual);
 
-        // Ẩn/Hiện cây súng xoay giữa bàn
+        // Cập nhật trạng thái súng trên bàn
+        RefreshRotatingGunVisibility();
+    }
+    private void OnGunInLeftHandChanged()
+    {
+        // Bật/tắt súng ở tay TRÁI (dùng khi cưa)
+        if (gunInLeftHandProp != null) 
+            gunInLeftHandProp.SetActive(IsHoldingGunInLeftHand);
+
+        // Cập nhật trạng thái súng trên bàn
+        RefreshRotatingGunVisibility();
+    }
+
+    private void RefreshRotatingGunVisibility()
+    {
         if (ItemsManager.Instance?.gunManager != null)
         {
             var realGun = ItemsManager.Instance.gunManager.rotatingGun;
-            if (realGun != null) realGun.SetActive(!IsHoldingGunVisual);
-        }*/
+            if (realGun != null)
+            {
+                // Chỉ hiện súng trên bàn nếu KHÔNG cầm súng phải VÀ KHÔNG cầm súng trái
+                bool shouldShowOnTable = !IsHoldingGunVisual && !IsHoldingGunInLeftHand;
+                realGun.SetActive(shouldShowOnTable);
+            }
+        }
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
@@ -121,18 +162,24 @@ public class PlayerActionController : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_FinishAction()
     {
-        NetworkedPropIndex = -1;
+        // Vì hàm này chạy trên StateAuthority, các dòng dưới đây sẽ có hiệu lực đồng bộ
         IsHoldingGunVisual = false; 
+        IsHoldingGunInLeftHand = false;
+        NetworkedPropIndex = -1; // Reset vật phẩm trên tay
 
         if (ItemsManager.Instance != null)
         {
             ItemsManager.Instance.RealClearItem();
+            
             if (ItemsManager.Instance.gunManager != null)
             {
                 var gm = ItemsManager.Instance.gunManager;
                 gm.isAnimatingAction = false; 
-                gm.hasShotThisTurn = false;
+                gm.hasShotThisTurn = false; // Mở khóa cho lượt bắn tiếp theo
                 gm.UnlockLocalAction();
+                
+                // QUAN TRỌNG: Cập nhật lại súng trên bàn và xoay về hướng người chơi mới
+                gm.RPC_SyncVisuals(); 
             }
         }
     }
@@ -147,11 +194,39 @@ public class PlayerActionController : NetworkBehaviour
 
     public void AnimEvent_StartSawing()
     {
+        // Khi item đang dùng là cái cưa (ID = 2)
         if (HasStateAuthority && _currentUsingItemID == 2) 
-            IsHoldingGunVisual = true;
+        {
+            IsHoldingGunVisual = false; // Đảm bảo súng tay phải đang tắt
+            IsHoldingGunInLeftHand = true; // Bật súng tay trái & giấu súng trên bàn
+        }
     }
 
-    public void OnActionFinished() => RPC_FinishAction();
+    // Gán Event này vào frame cuối cùng của Animation Bắn
+    public void OnActionFinished() 
+    {
+        // Gọi RPC này để tất cả các máy cùng ẩn súng ngay lập tức
+        RPC_ForceHideGuns();
+        
+        // Vẫn gọi cái này để Server dọn dẹp logic (trả súng về bàn, đổi turn)
+        RPC_FinishAction();
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_ForceHideGuns()
+    {
+        // Ép ẩn tất cả súng trên tay ở local của mỗi máy
+        if (gunInHandProp != null) gunInHandProp.SetActive(false);
+        if (gunInLeftHandProp != null) gunInLeftHandProp.SetActive(false);
+        
+        // Ẩn luôn các props khác nếu có
+        HideAllProps();
+
+        // Cập nhật lại biến local (Dù là máy Client cũng sẽ thấy súng mất ngay)
+        IsHoldingGunVisual = false;
+        IsHoldingGunInLeftHand = false;
+        NetworkedPropIndex = -1;
+    }
     public void OnItemEffectMoment() => RPC_ApplyItemEffect(_currentUsingItemID);
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -188,9 +263,6 @@ public class PlayerActionController : NetworkBehaviour
         _anim.SetTrigger("StartShoot"); 
         if (shootSelf) _anim.SetTrigger("ShotMe");
         else _anim.SetTrigger("ShotYou");
-        
-        // Bật súng lên tay ngay khi bắt đầu diễn cảnh bắn
-       // IsHoldingGunVisual = true; 
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
@@ -198,13 +270,74 @@ public class PlayerActionController : NetworkBehaviour
     {
         if (_anim != null) _anim.SetTrigger("FireMe");
     }
-
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    public void RPC_EndShooting()
+    public void AnimEvent_PickupGun() 
     {
-       // IsHoldingGunVisual = false; 
-        _anim.SetTrigger("BackToSit"); 
+        if (HasStateAuthority) 
+        {
+            NetworkedPropIndex = _currentUsingItemID; 
+        }
+
+        // THÊM DÒNG NÀY: Ép hiện prop ngay tại máy người chơi cho mượt
+        RefreshPropsVisibility(); 
+
+        var im = ItemsManager.Instance;
+        if (im != null && im.networkedPendingSlot != -1)
+        {
+            im.RPC_HideWorldItemVisual(im.networkedPendingFromLeft, im.networkedPendingSlot);
+        }
     }
 
-    public void OnShootMoment() { }
+    public void AnimEvent_UnlockOnly()
+    {
+        if (HasStateAuthority && ItemsManager.Instance?.gunManager != null)
+        {
+            var gm = ItemsManager.Instance.gunManager;
+            gm.isAnimatingAction = false;
+            gm.UnlockLocalAction();
+        }
+    }
+
+    // Hàm này sẽ được gọi từ Animation Event khi tay chạm vào súng trên bàn
+    public void AnimEvent_SwapGunFromTableToHand()
+    {
+        // 1. Chỉ máy có quyền (StateAuthority) mới thay đổi dữ liệu mạng
+        if (HasStateAuthority)
+        {
+            // Bật súng trên tay (Visual súng bắn)
+            IsHoldingGunVisual = true;
+            
+            // Nếu là súng dạng vật phẩm (Item), bật chỉ số prop
+            // NetworkedPropIndex = _currentUsingItemID; 
+        }
+
+        // 2. Ẩn súng trên bàn ngay lập tức thông qua ItemsManager
+        var im = ItemsManager.Instance;
+        if (im != null)
+        {
+            // Ẩn súng ở vị trí slot đang chờ
+            if (im.networkedPendingSlot != -1)
+            {
+                im.RPC_HideWorldItemVisual(im.networkedPendingFromLeft, im.networkedPendingSlot);
+            }
+            
+            // Nếu là cây súng xoay ở giữa bàn (Rotating Gun), ẩn nó đi
+            if (im.gunManager != null && im.gunManager.rotatingGun != null)
+            {
+                // Tạm thời ẩn visual cây súng giữa bàn
+                im.gunManager.rotatingGun.SetActive(false);
+            }
+        }
+    }
+
+    public void OnShootMoment() 
+    {
+        if (HasStateAuthority)
+        {
+            if (ItemsManager.Instance?.gunManager != null)
+            {
+                // Gọi lệnh trừ máu bên Manager khi súng nổ
+                ItemsManager.Instance.gunManager.RPC_ApplyShootDamage();
+            }
+        }
+    }
 }
