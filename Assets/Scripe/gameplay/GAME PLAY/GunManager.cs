@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections;
 using TMPro;
 using DG.Tweening;
+using System.Linq;
 
 public class GunManager : NetworkBehaviour
 {
@@ -58,6 +59,8 @@ public class GunManager : NetworkBehaviour
     private bool isWaitingTextVisible = false;
     private Coroutine _healthAnimCoroutine;
     private bool isStartingNextRound = false;
+    // Tìm dòng 53, đổi tên biến thành:
+    private float _lastEjectTime;
 
     [Header("Mouse Sway Settings")]
     public float swayAmount = 2.0f; 
@@ -157,53 +160,81 @@ private IEnumerator AnimateBulletSequence(List<bool> bulletList)
         } 
     }
 
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
-    public void RPC_Shoot(bool shootSelf) 
-    { 
-        if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
-        
-        hasShotThisTurn = true; 
-        bool isReal = bullets[0]; 
-        bool isLast = (bulletCount == 1); 
-        
-        EjectBullet(); 
-        
-        int dmg = doubleDamage ? 2 : 1; 
-        doubleDamage = false; 
-        
-        bool shouldChangeTurn = true; 
-        if (isReal) 
-        { 
-            if (activePlayerIndex == 0) { if (shootSelf) player1HP -= dmg; else player2HP -= dmg; } 
-            else { if (shootSelf) player2HP -= dmg; else player1HP -= dmg; }
-            shouldChangeTurn = true; 
-        } 
-        else 
-        {
-            shouldChangeTurn = !shootSelf; 
-        }
-        
-        player1HP = Mathf.Max(0, player1HP); 
-        player2HP = Mathf.Max(0, player2HP); 
+[Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
+public void RPC_Shoot(bool shootSelf) 
+{ 
+    if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
+    
+    // Tìm Player đang thực hiện lượt này
+    var allPlayers = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None);
+    var actingPlayer = allPlayers.FirstOrDefault(p => p.PlayerIndex == activePlayerIndex);
 
-        // BƯỚC QUAN TRỌNG: Nếu là viên cuối, khóa Round NGAY LẬP TỨC ở mức Network
-        if (isLast && player1HP > 0 && player2HP > 0) 
-        {
-            isWaitingNextRound = true; 
-        }
-
-        RPC_AnimateHealth(player1HP, player2HP, shouldChangeTurn, isLast); 
-
-        if (shouldChangeTurn) ChangeTurn(); 
-        else 
-        {
-            hasShotThisTurn = false; 
-            RPC_UnlockLocalForAll();
-        }
-
-        CheckGameOver(); 
+    if (actingPlayer != null)
+    {
+        // GỌI Ở ĐÂY: Ra lệnh cho nhân vật bắt đầu diễn kịch bản nhặt súng và bắn
+        actingPlayer.RPC_StartShootingSequence(shootSelf);
     }
 
+    hasShotThisTurn = true; 
+    bool isReal = bullets[0]; 
+    bool isLast = (bulletCount == 1); 
+    
+    EjectBullet(); 
+    
+    int dmg = doubleDamage ? 2 : 1; 
+    doubleDamage = false; 
+    
+    bool shouldChangeTurn = true; 
+
+    if (isReal) 
+    { 
+        // --- LOGIC TÍNH SÁT THƯƠNG CHUẨN ---
+        if (activePlayerIndex == 0) // Lượt của Player 1 (Bên trái)
+        {
+            if (shootSelf) 
+                player1HP -= dmg; // P1 tự bắn mình -> P1 mất máu
+            else 
+                player2HP -= dmg; // P1 bắn đối thủ -> P2 mất máu
+        } 
+        else // Lượt của Player 2 (Bên phải)
+        {
+            if (shootSelf) 
+                player2HP -= dmg; // P2 tự bắn mình -> P2 mất máu
+            else 
+                player1HP -= dmg; // P2 bắn đối thủ -> P1 mất máu
+        }
+        shouldChangeTurn = true; 
+    } 
+    else // Đạn giả (Blank)
+    {
+        // Nếu tự bắn mình bằng đạn giả thì được giữ lượt (không đổi turn)
+        shouldChangeTurn = !shootSelf; 
+    }
+    
+    // Đảm bảo máu không bao giờ xuống dưới 0
+    player1HP = Mathf.Max(0, player1HP); 
+    player2HP = Mathf.Max(0, player2HP); 
+
+    if (isLast && player1HP > 0 && player2HP > 0) 
+    {
+        isWaitingNextRound = true; 
+    }
+
+    // Gửi dữ liệu máu đã cập nhật xuống các máy để diễn hiệu ứng
+    RPC_AnimateHealth(player1HP, player2HP, shouldChangeTurn, isLast); 
+
+    if (shouldChangeTurn) 
+    {
+        ChangeTurn(); 
+    }
+    else 
+    {
+        hasShotThisTurn = false; 
+        RPC_UnlockLocalForAll(); // Mở khóa cho phép bắn tiếp vì được giữ lượt
+    }
+
+    CheckGameOver(); 
+}
     // Thêm hàm phụ này ngay dưới RPC_Shoot để hỗ trợ Invoke
     private void CallNextRoundRoutine() 
     {
@@ -221,7 +252,9 @@ private IEnumerator AnimateBulletSequence(List<bool> bulletList)
 
     IEnumerator HealthAnimationSequence(int p1, int p2, bool turnedChanged, bool lastBullet) { 
         if (hpUI != null) {
-            UpdateUIWithSpecificHP(p1, p2); 
+
+            hpUI.UpdateHealthUI(p1, p2);
+
             yield return StartCoroutine(hpUI.ShowHealthGroups()); 
             yield return new WaitForSeconds(1.0f); 
             yield return StartCoroutine(hpUI.HideHealthGroups()); 
@@ -268,6 +301,12 @@ public void ChangeTurn()
     // 🔥 Sync UI + animation
     RPC_SyncVisuals();
 }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_SyncVisuals()
+    {
+        RotateGunToActivePlayer();
+    }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     void RPC_UnlockLocalForAll()
@@ -351,17 +390,17 @@ public void ChangeTurn()
 
 public IEnumerator NextRoundRoutine(bool isFirstRound = false) 
 {
+    // CỰC KỲ QUAN TRỌNG: Chỉ Server mới chạy logic tính toán
     if (!HasStateAuthority) yield break;
 
     isWaitingNextRound = true; 
     hasShotThisTurn = false;
 
-    // 1. DỌN RÁC: Xóa sạch đạn cũ trên bàn trước khi nạp mới
-    GameObject[] oldBullets = GameObject.FindGameObjectsWithTag("Bullet");
-    foreach (var b in oldBullets) if (b != null) Destroy(b);
-    yield return new WaitForSeconds(0.2f); // Đợi nhẹ để Engine dọn xong
+    // 1. DỌN RÁC (Chỉ dọn trên Server, RPC sẽ dọn trên Client)
+    RPC_ClearOldBullets();
+    yield return new WaitForSeconds(0.2f);
 
-    // 2. TÍNH TOÁN SỐ ĐẠN
+    // 2. TÍNH TOÁN SỐ ĐẠN (Host quyết định)
     int tReal = 0; int tBlank = 0; int itemsToGive = 0;
     if (currentRound == 1) { tReal = 1; tBlank = 2; itemsToGive = 0; }
     else if (currentRound == 2) { tReal = 2; tBlank = 2; itemsToGive = 2; }
@@ -372,41 +411,91 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
         itemsToGive = 2;
     }
 
-    // 3. CHUẨN BỊ DANH SÁCH HIỂN THỊ (Đỏ trước - Trắng sau)
-    List<bool> displayList = new List<bool>();
-    for(int i = 0; i < tReal; i++) displayList.Add(true);
-    for(int i = 0; i < tBlank; i++) displayList.Add(false);
+    // 3. CẬP NHẬT DỮ LIỆU MẠNG ĐỂ BẮN (Xào đạn bí mật)
+    List<bool> shootList = new List<bool>();
+    for(int i = 0; i < tReal; i++) shootList.Add(true);
+    for(int i = 0; i < tBlank; i++) shootList.Add(false);
 
-    // 4. TRỘN ĐẠN THỰC TẾ TRONG SÚNG
-    List<bool> shootList = new List<bool>(displayList);
     for (int i = 0; i < shootList.Count; i++) {
         int r = Random.Range(i, shootList.Count);
         (shootList[i], shootList[r]) = (shootList[r], shootList[i]);
     }
 
-    // Cập nhật lên Network
     bulletCount = shootList.Count;
     for (int i = 0; i < bulletCount; i++) bullets.Set(i, shootList[i]);
 
-    // 5. HIỆN CHỮ ROUND TRƯỚC KHI RA ĐẠN (Cho người chơi chuẩn bị tâm lý)
+    // 4. HIỆN CHỮ ROUND (Cho cả 2 máy)
     RPC_PlayRoundEffect(currentRound);
     yield return new WaitForSeconds(1.0f); 
 
-    // 6. DIỄN HIỆU ỨNG RA ĐẠN (CỰC KỲ QUAN TRỌNG)
-    yield return StartCoroutine(AnimateBulletSequence(displayList));
+    // 5. 🔥 PHÁT LỆNH DIỄN HIỆU ỨNG CHO CẢ 2 MÁY (Quan trọng nhất)
+    // Truyền tReal và tổng số đạn để máy khách tự tạo danh sách hiển thị Đỏ/Trắng
+    // Tìm trong hàm NextRoundRoutine (khoảng dòng 265), sửa lại thành:
+    RPC_AnimateBulletsForAll(tReal, bulletCount);
 
-    // 7. PHÁT ĐỒ
+    // Đợi thời gian diễn hoạt đạn (tầm 3-4s tùy độ dài hàm Animate của ông)
+    yield return new WaitForSeconds(4.0f); 
+
+    // 6. PHÁT ĐỒ
     if (itemsManager != null && itemsToGive > 0)
     {
         itemsManager.GiveRandomItemsToBoth(itemsToGive);
         yield return new WaitForSeconds(1.5f);
     }
 
-    // 8. KẾT THÚC CHỜ
+    // 7. GIẢI PHÓNG
     isWaitingNextRound = false; 
-    RPC_SyncVisuals();
     RPC_UnlockLocalForAll();
 }
+
+// --- CÁC RPC HỖ TRỢ ĐỂ ĐỒNG BỘ HIỂN THỊ ---
+
+[Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+public void RPC_ClearOldBullets()
+{
+    GameObject[] oldBullets = GameObject.FindGameObjectsWithTag("Bullet");
+    foreach (var b in oldBullets) {
+        if (b != null) {
+            b.transform.DOKill();
+            Destroy(b);
+        }
+    }
+}
+
+[Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
+{
+    // Mỗi máy tự tạo một list hiển thị (Thật hiện trước cho dễ đếm)
+    List<bool> displayList = new List<bool>();
+    for(int i = 0; i < realCount; i++) displayList.Add(true);
+    for(int i = 0; i < (totalCount - realCount); i++) displayList.Add(false);
+
+    // Mỗi máy tự chạy Coroutine diễn hoạt cục bộ của mình
+    StartCoroutine(AnimateBulletSequence(displayList));
+}
+
+// --- SỬA LỖI VĂNG 2 VIÊN SODA ---
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_AnimateSodaEject(bool isReal)
+    {
+        // Chặn nếu lệnh thực thi quá nhanh (chống văng 2 viên trên máy Host)
+        if (Time.time - _lastEjectTime < 0.1f) return;
+        _lastEjectTime = Time.time;
+
+        if (muzzlePoint == null) return;
+
+        GameObject prefab = isReal ? realBulletPrefab : blankBulletPrefab;
+        GameObject ejectedBullet = Instantiate(prefab, muzzlePoint.position, muzzlePoint.rotation);
+        ejectedBullet.tag = "Bullet"; 
+
+        Vector3 dropPos = bulletTablePoint.position + new Vector3(Random.Range(-0.1f, 0.1f), 0, Random.Range(-0.1f, 0.1f));
+        ejectedBullet.transform.DOJump(dropPos, 0.5f, 1, 0.6f).SetEase(Ease.OutQuad);
+        ejectedBullet.transform.DORotate(new Vector3(Random.Range(0, 360), Random.Range(0, 360), Random.Range(0, 360)), 0.6f);
+
+        ejectedBullet.transform.DOScale(Vector3.zero, 0.3f).SetDelay(1.2f).OnComplete(() => {
+            if(ejectedBullet != null) Destroy(ejectedBullet);
+        });
+    }
     void Update() 
     {
         // 1. Kiểm tra an toàn
@@ -485,51 +574,7 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
     void RotateGunToActivePlayer() { if (rotatingGun == null) return; rotatingGun.transform.DOKill(); float targetZ = (activePlayerIndex == 0) ? -90f : 90f; rotatingGun.transform.DORotate(new Vector3(90f, 0f, targetZ), 0.8f).SetEase(Ease.OutBack); }
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)] void RPC_TriggerHealthIntro() { if (hpUI != null) hpUI.StartHealthIntro(); }
     
-    void GenerateBullets() { 
-        if (!HasStateAuthority) return; 
 
-        List<bool> temp = new List<bool>(); 
-
-        // --- CÔNG THỨC VÔ TẬN ---
-        // Tổng số đạn tăng dần theo Round, nhưng tối đa là 8 (do Capacity(8))
-        int totalAmmo = Mathf.Clamp(2 + (currentRound / 2), 2, 8); 
-
-        // Số viên đạn thật: Ít nhất 1 viên, nhiều nhất là (tổng - 1) để luôn có đạn giả
-        // Tỉ lệ đạn thật sẽ dao động quanh mức 50%
-        int real = Random.Range(1, totalAmmo); 
-        int blank = totalAmmo - real;
-
-        // Trường hợp đặc biệt: Nếu may mắn/đen đủi ra toàn 1 loại, 
-        // mình ép nó phải có ít nhất 1 viên mỗi loại cho vui
-        if (real == 0) { real = 1; blank--; }
-        if (blank == 0) { blank = 1; real--; }
-
-        // 1. Thêm vào danh sách
-        AddBulletsToList(temp, real, blank); 
-
-        // 2. Trộn đạn (Fisher-Yates Shuffle)
-        for (int i = 0; i < temp.Count; i++) { 
-            int r = Random.Range(i, temp.Count); 
-            (temp[i], temp[r]) = (temp[r], temp[i]); 
-        } 
-
-        // 3. Đồng bộ NetworkArray
-        bulletCount = temp.Count; 
-        for (int i = 0; i < temp.Count; i++) {
-            bullets.Set(i, temp[i]); 
-        }
-
-        Debug.Log($"<color=cyan>[Endless]</color> Round {currentRound}: {real} Thật / {blank} Giả (Tổng {totalAmmo})");
-    }
-
-    void AddBulletsToList(List<bool> list, int real, int blank) { for (int i = 0; i < real; i++) list.Add(true); for (int i = 0; i < blank; i++) list.Add(false); }
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)] void RPC_SyncVisuals() => RotateGunToActivePlayer();
-    
-    void UpdateUIWithSpecificHP(int p1, int p2) { 
-        if (hpUI == null) return; 
-        int idx = (Runner.IsServer) ? 0 : 1; 
-        if (idx == 0) hpUI.UpdateHealthUI(p1, p2); else hpUI.UpdateHealthUI(p2, p1); 
-    }
 
     public bool IsMyTurn() { if (Runner == null || Runner.LocalPlayer == PlayerRef.None) return false; int idx = (Runner.IsServer) ? 0 : 1; return idx == activePlayerIndex; }
     // Đổi tên từ GetCurrentBulletStatus thành GetCurrentBulletType để khớp với các script khác
@@ -551,13 +596,19 @@ public IEnumerator NextRoundRoutine(bool isFirstRound = false)
     public void EjectBullet() 
     {
         if (bulletCount <= 0) return;
-        
-        // Dồn mảng đạn lên 1 ô
-        for (int i = 0; i < bulletCount - 1; i++) 
-            bullets.Set(i, bullets[i + 1]);
-            
-        // Xóa viên cuối
-        bullets.Set(bulletCount - 1, false);
+
+        // Tạo một list tạm để tính toán logic dồn đạn
+        List<bool> tempBullets = new List<bool>();
+        for (int i = 1; i < bulletCount; i++) {
+            tempBullets.Add(bullets[i]);
+        }
+
+        // Cập nhật lại NetworkArray cho tất cả các máy cùng thấy
+        for (int i = 0; i < tempBullets.Count; i++) {
+            bullets.Set(i, tempBullets[i]);
+        }
+
         bulletCount--;
     }
+
 }

@@ -1,5 +1,6 @@
 using Fusion;
 using UnityEngine;
+using System.Linq;
 
 public class PlayerActionController : NetworkBehaviour
 {
@@ -51,14 +52,11 @@ public class PlayerActionController : NetworkBehaviour
 
     public void SetCurrentItem(int id) => _currentUsingItemID = id;
 
-    // --- LOGIC HIỂN THỊ VẬT PHẨM ---
-
     private void RefreshPropsVisibility()
     {
         HideAllProps();
         if (NetworkedPropIndex <= 0) return; 
 
-        // Lúc mới nhặt: Hiện ở tay theo hướng nhặt (isRightSide)
         bool isRightSide = _anim.GetBool("IsRightSide");
         GameObject prop = GetPropFromID(NetworkedPropIndex, !isRightSide);
         if (prop != null) prop.SetActive(true);
@@ -69,14 +67,12 @@ public class PlayerActionController : NetworkBehaviour
         int index = id - 1; 
         if (index < 0) return null;
 
-        // ÉP BUỘC: Kính (1) và Cưa (2) luôn bên tay PHẢI
         if (id == 1 || id == 2)
         {
             if (rightProps != null && index < rightProps.Length) return rightProps[index];
             return null;
         }
 
-        // Các món khác (Coca, Thuốc...)
         if (isLeft)
             return (leftProps != null && index < leftProps.Length) ? leftProps[index] : null;
         else
@@ -89,35 +85,27 @@ public class PlayerActionController : NetworkBehaviour
         if (rightProps != null) foreach (var p in rightProps) if (p) p.SetActive(false);
     }
 
-    // --- ANIMATION EVENTS (DÙNG ĐỂ FIX LỖI CỦA ÔNG) ---
-
-    // Gắn Event này vào lúc bắt đầu Animation "Uống/Dùng" (sau khi nhặt xong)
-    // Nó sẽ tắt đồ bên tay trái và bật đồ bên tay phải lên để diễn cảnh uống
     public void SwitchPropToRightHand()
     {
         if (NetworkedPropIndex <= 0) return;
-
-        // Tắt hết
         HideAllProps();
-
-        // Bật đúng món đó ở bên tay PHẢI (isLeft = false)
         GameObject rightProp = GetPropFromID(NetworkedPropIndex, false);
         if (rightProp != null) rightProp.SetActive(true);
     }
 
-    // --- ĐỒNG BỘ CẦM SÚNG ---
-
+    // --- ĐỒNG BỘ CẦM SÚNG (Đã fix tay phải) ---
     private void OnGunInHandChanged()
     {
+        // Hiện súng trên tay nhân vật (Súng này nằm ở xương tay phải)
         if (gunInHandProp != null) gunInHandProp.SetActive(IsHoldingGunVisual);
+
+        // Ẩn/Hiện cây súng xoay giữa bàn
         if (ItemsManager.Instance?.gunManager != null)
         {
             var realGun = ItemsManager.Instance.gunManager.rotatingGun;
             if (realGun != null) realGun.SetActive(!IsHoldingGunVisual);
         }
     }
-
-    // --- ACTIONS ---
 
     [Rpc(RpcSources.All, RpcTargets.All)]
     public void RPC_PlayPickupAction(int itemID, bool isRightSide)
@@ -142,7 +130,7 @@ public class PlayerActionController : NetworkBehaviour
             if (ItemsManager.Instance.gunManager != null)
             {
                 var gm = ItemsManager.Instance.gunManager;
-                gm.isAnimatingAction = false;
+                gm.isAnimatingAction = false; 
                 gm.hasShotThisTurn = false;
                 gm.UnlockLocalAction();
             }
@@ -192,4 +180,31 @@ public class PlayerActionController : NetworkBehaviour
             handcuffedModel.SetActive(amITheVictim);
         if (_anim != null) _anim.SetBool("IsHandcuffed", amITheVictim); 
     }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_StartShootingSequence(bool shootSelf)
+    {
+        if (_anim == null) return;
+        _anim.SetTrigger("StartShoot"); 
+        if (shootSelf) _anim.SetTrigger("ShotMe");
+        else _anim.SetTrigger("ShotYou");
+        
+        // Bật súng lên tay ngay khi bắt đầu diễn cảnh bắn
+        IsHoldingGunVisual = true; 
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_PlayFireMe()
+    {
+        if (_anim != null) _anim.SetTrigger("FireMe");
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_EndShooting()
+    {
+        IsHoldingGunVisual = false; 
+        _anim.SetTrigger("BackToSit"); 
+    }
+
+    public void OnShootMoment() { }
 }
