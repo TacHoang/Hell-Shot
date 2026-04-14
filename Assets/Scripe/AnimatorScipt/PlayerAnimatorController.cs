@@ -1,6 +1,7 @@
 using Fusion;
 using UnityEngine;
 using System.Linq;
+using System.Collections;
 
 public class PlayerActionController : NetworkBehaviour
 {
@@ -25,6 +26,19 @@ public class PlayerActionController : NetworkBehaviour
     public GameObject handcuffedModel; 
     public GameObject gunInHandProp;   
     public GameObject gunInLeftHandProp; // THÊM CÁI NÀY: Súng tay trái (khi cưa)
+
+    [Header("VFX & Audio")]
+    public ParticleSystem flashEffect; 
+    public ParticleSystem bloodSplatterEffect; // Thêm cái này: Hiệu ứng máu
+    public AudioSource audioSource;    
+    public AudioClip realBulletSound;  
+    public AudioClip blankBulletSound;
+
+    [Header("Item Audio Clips")]
+    public AudioClip glassSound;  // ID 1
+    public AudioClip sawSound;    // ID 2
+    public AudioClip cuffSound;   // ID 3
+    public AudioClip pillSound;   // ID 4, 5, 6 dùng chung (âm thanh uống/nuốt)
 
     [Header("Hand Props Setup")]
     public GameObject[] leftProps;  
@@ -52,6 +66,39 @@ public class PlayerActionController : NetworkBehaviour
 
         var gm = FindFirstObjectByType<GunManager>();
         if (gm != null) gm.RegisterPlayer(this);
+    }
+
+    private void PlayItemSound(int id)
+    {
+        // Thay vì phát luôn, ta gọi Coroutine để chờ
+        StartCoroutine(DelayPlaySound(id, 2.0f)); // 1.0f là 1 giây
+    }
+
+    private IEnumerator DelayPlaySound(int id, float delayTime)
+    {
+        // Chờ đúng số giây ông muốn
+        yield return new WaitForSeconds(delayTime);
+
+        if (audioSource == null) yield break;
+
+        AudioClip clipToPlay = null;
+
+        switch (id)
+        {
+            case 1: clipToPlay = glassSound; break;
+            case 2: clipToPlay = sawSound; break;
+            case 3: clipToPlay = cuffSound; break;
+            case 4: 
+            case 5: 
+            case 6: 
+                clipToPlay = pillSound; 
+                break;
+        }
+
+        if (clipToPlay != null)
+        {
+            audioSource.PlayOneShot(clipToPlay);
+        }
     }
 
     // Hàm thực hiện diễn cảnh té
@@ -157,6 +204,9 @@ public class PlayerActionController : NetworkBehaviour
         _anim.SetTrigger("Use" + itemID); 
 
         if (itemID == 1) _anim.SetTrigger("MagnifyTrigger");
+
+        // THÊM DÒNG NÀY ĐỂ PHÁT ÂM THANH
+        PlayItemSound(itemID);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -333,11 +383,50 @@ public class PlayerActionController : NetworkBehaviour
     {
         if (HasStateAuthority)
         {
-            if (ItemsManager.Instance?.gunManager != null)
+            var gm = ItemsManager.Instance?.gunManager;
+            if (gm != null)
             {
-                // Gọi lệnh trừ máu bên Manager khi súng nổ
-                ItemsManager.Instance.gunManager.RPC_ApplyShootDamage();
+                // 1. Kiểm tra loại đạn (Thật/Giả)
+                bool isReal = gm.GetCurrentBulletType();
+
+                // 2. Tìm nạn nhân dựa trên targetPlayerIndex trong GunManager
+                // (Nếu targetPlayerIndex là index của đối thủ hoặc mình)
+                PlayerActionController victim = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None)
+                                                .FirstOrDefault(p => p.PlayerIndex == gm.targetPlayerIndex);
+
+                // 3. Gọi RPC để tất cả mọi người (bao gồm cả mình) thấy hiệu ứng
+                RPC_PlayShootEffects(isReal, victim);
+
+                // 4. Gọi lệnh trừ máu cũ của ông
+                gm.RPC_ApplyShootDamage();
             }
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_PlayShootEffects(bool isReal, PlayerActionController victim)
+    {
+        if (isReal)
+        {
+            // HIỆU ỨNG ĐẠN THẬT
+            if (flashEffect != null) flashEffect.Play(); // Lửa ở họng súng người bắn
+            
+            if (audioSource != null && realBulletSound != null)
+                audioSource.PlayOneShot(realBulletSound); // Tiếng nổ
+
+            // Máu tóe trên người nạn nhân
+            if (victim != null && victim.bloodSplatterEffect != null)
+            {
+                victim.bloodSplatterEffect.Play();
+            }
+        }
+        else
+        {
+            // HIỆU ỨNG ĐẠN GIẢ
+            if (audioSource != null && blankBulletSound != null)
+                audioSource.PlayOneShot(blankBulletSound); // Tiếng "cạch"
+                
+            // Đạn giả thì không chạy flashEffect và không có máu
         }
     }
 }

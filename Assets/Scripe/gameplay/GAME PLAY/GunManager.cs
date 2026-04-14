@@ -24,6 +24,8 @@ public class GunManager : NetworkBehaviour
     [Networked] public float finalGunAngle { get; set; }
     [Networked] public NetworkBool isAnimatingAction { get; set; }
     [Networked] public int cuffedPlayerIndex { get; set; } = -1;
+    // Thêm dòng này vào GunManager.cs
+    [Networked] public int targetPlayerIndex { get; set; }
 
     // --- GAMEPLAY REFERENCES ---
     [Header("Core References")]
@@ -215,25 +217,40 @@ private IEnumerator AnimateBulletSequence(List<bool> bulletList)
             RPC_Shoot(shootSelf); 
         } 
     }
-[Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
-public void RPC_Shoot(bool shootSelf) 
-{ 
-    if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
-    
-    // Lưu tạm kết quả để đợi tí nữa Animation Event gọi mới áp dụng
-    _pendingShootSelf = shootSelf;
-    _pendingDmg = doubleDamage ? 2 : 1;
-    doubleDamage = false; 
-    hasShotThisTurn = true;
 
-    var allPlayers = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None);
-    var actingPlayer = allPlayers.FirstOrDefault(p => p.PlayerIndex == activePlayerIndex);
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
+    public void RPC_Shoot(bool shootSelf) 
+    { 
+        if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
+        
+        // --- KHÚC GÁN TARGET ĐỂ HẾT BÁO ĐỎ ---
+        if (shootSelf) 
+        {
+            // Nếu tự bắn, mục tiêu chính là người đang cầm súng (activePlayerIndex)
+            targetPlayerIndex = activePlayerIndex; 
+        } 
+        else 
+        {
+            // Nếu bắn đối thủ, mục tiêu là người có index ngược lại (0 thành 1, 1 thành 0)
+            targetPlayerIndex = (activePlayerIndex == 0) ? 1 : 0; 
+        }
+        // -------------------------------------
 
-    if (actingPlayer != null)
-    {
-        actingPlayer.RPC_StartShootingSequence(shootSelf);
+        // Lưu tạm kết quả để đợi tí nữa Animation Event gọi mới áp dụng
+        _pendingShootSelf = shootSelf;
+        _pendingDmg = doubleDamage ? 2 : 1;
+        doubleDamage = false; 
+        hasShotThisTurn = true;
+
+        // Tìm người thực hiện hành động để chạy Anim
+        var allPlayersControllers = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None);
+        var actingPlayer = allPlayersControllers.FirstOrDefault(p => p.PlayerIndex == activePlayerIndex);
+
+        if (actingPlayer != null)
+        {
+            actingPlayer.RPC_StartShootingSequence(shootSelf);
+        }
     }
-}
 
 [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
 public void RPC_ApplyShootDamage()
@@ -557,20 +574,15 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
     StartCoroutine(AnimateBulletSequence(displayList));
 }
 
-// --- SỬA LỖI VĂNG 2 VIÊN SODA ---
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    public void RPC_AnimateSodaEject(bool isReal)
-    {
-        // Chặn nếu lệnh thực thi quá nhanh (chống văng 2 viên trên máy Host)
-        if (Time.time - _lastEjectTime < 0.1f) return;
-        _lastEjectTime = Time.time;
 
+    // Hàm dùng chung cho cả Host và Client để sinh Prefab
+    private void SpawnBulletVisual(bool isReal)
+    {
         if (muzzlePoint == null) return;
 
         GameObject prefab = isReal ? realBulletPrefab : blankBulletPrefab;
         GameObject ejectedBullet = Instantiate(prefab, muzzlePoint.position, muzzlePoint.rotation);
-        ejectedBullet.tag = "Bullet"; 
-
+        
         Vector3 dropPos = bulletTablePoint.position + new Vector3(Random.Range(-0.1f, 0.1f), 0, Random.Range(-0.1f, 0.1f));
         ejectedBullet.transform.DOJump(dropPos, 0.5f, 1, 0.6f).SetEase(Ease.OutQuad);
         ejectedBullet.transform.DORotate(new Vector3(Random.Range(0, 360), Random.Range(0, 360), Random.Range(0, 360)), 0.6f);
@@ -579,6 +591,44 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
             if(ejectedBullet != null) Destroy(ejectedBullet);
         });
     }
+
+    // Host gọi hàm này
+    public void PlaySodaVisualLocal(bool isReal)
+    {
+        SpawnBulletVisual(isReal);
+    }
+    [Rpc(RpcSources.StateAuthority, RpcTargets.Proxies)]
+    public void RPC_AnimateSodaEject_Proxies(bool isReal)
+    {
+        SpawnBulletVisual(isReal);
+    }
+
+    // Client nhận hàm này thông qua Proxies
+    [Rpc(RpcSources.StateAuthority, RpcTargets.Proxies)]
+    public void RPC_AnimateSodaEject(bool isReal)
+    {
+        SpawnBulletVisual(isReal);
+    }
+
+    // Logic sinh đạn văng ra tách riêng để dùng chung
+    private void SpawnEjectedBullet(bool isReal)
+    {
+        if (muzzlePoint == null) return;
+
+        GameObject prefab = isReal ? realBulletPrefab : blankBulletPrefab;
+        GameObject ejectedBullet = Instantiate(prefab, muzzlePoint.position, muzzlePoint.rotation);
+        ejectedBullet.tag = "Bullet"; 
+
+        Vector3 dropPos = bulletTablePoint.position + new Vector3(Random.Range(-0.1f, 0.1f), 0, Random.Range(-0.1f, 0.1f));
+        
+        ejectedBullet.transform.DOJump(dropPos, 0.5f, 1, 0.6f).SetEase(Ease.OutQuad);
+        ejectedBullet.transform.DORotate(new Vector3(Random.Range(0, 360), Random.Range(0, 360), Random.Range(0, 360)), 0.6f);
+
+        ejectedBullet.transform.DOScale(Vector3.zero, 0.3f).SetDelay(1.2f).OnComplete(() => {
+            if(ejectedBullet != null) Destroy(ejectedBullet);
+        });
+    }
+
     void Update() 
     {
          if (isGameOver) return; // 🔥 CHẶN HẾT UI + logic
@@ -658,8 +708,6 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
     void RotateGunToActivePlayer() { if (rotatingGun == null) return; rotatingGun.transform.DOKill(); float targetZ = (activePlayerIndex == 0) ? -90f : 90f; rotatingGun.transform.DORotate(new Vector3(90f, 0f, targetZ), 0.8f).SetEase(Ease.OutBack); }
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)] void RPC_TriggerHealthIntro() { if (hpUI != null) hpUI.StartHealthIntro(); }
     
-
-
     public bool IsMyTurn() { if (Runner == null || Runner.LocalPlayer == PlayerRef.None) return false; int idx = (Runner.IsServer) ? 0 : 1; return idx == activePlayerIndex; }
     // Đổi tên từ GetCurrentBulletStatus thành GetCurrentBulletType để khớp với các script khác
     public bool GetCurrentBulletType() 
@@ -725,17 +773,18 @@ public void RPC_AnimateBulletsForAll(int realCount, int totalCount)
     }
     private void OnDestroy() { DOTween.KillAll(); }
 
+// --- PHẦN DỮ LIỆU (LOGIC) ---
     public void EjectBullet() 
     {
+        if (!HasStateAuthority) return;
         if (bulletCount <= 0) return;
 
-        // Tạo một list tạm để tính toán logic dồn đạn
+        // CỰC KỲ QUAN TRỌNG: Trong hàm này KHÔNG ĐƯỢC có dòng Instantiate nào.
+        // Nó chỉ được phép sắp xếp lại mảng đạn:
         List<bool> tempBullets = new List<bool>();
         for (int i = 1; i < bulletCount; i++) {
             tempBullets.Add(bullets[i]);
         }
-
-        // Cập nhật lại NetworkArray cho tất cả các máy cùng thấy
         for (int i = 0; i < tempBullets.Count; i++) {
             bullets.Set(i, tempBullets[i]);
         }
