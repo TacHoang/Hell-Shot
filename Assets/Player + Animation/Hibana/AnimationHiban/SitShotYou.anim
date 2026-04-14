@@ -230669,13 +230669,6 @@ AnimationClip:
     intParameter: 0
     messageOptions: 0
   - time: 2.4166667
-    functionName: 
-    data: 
-    objectReferenceParameter: {fileID: 0}
-    floatParameter: 0
-    intParameter: 0
-    messageOptions: 0
-  - time: 2.4166667
     functionName: OnActionFinished
     data: 
     objectReferenceParameter: {fileID: 0}

@@ -7600,9 +7600,11 @@ MonoBehaviour:
   _NetworkedPropIndex: -1
   _IsHoldingGunVisual:
     _value: 0
+  _IsHoldingGunInLeftHand:
+    _value: 0
   handcuffedModel: {fileID: 6376709163038711914}
   gunInHandProp: {fileID: 3919428155463254006}
-  gunInLeftHandSaw: {fileID: 4282120394585626952}
+  gunInLeftHandProp: {fileID: 4282120394585626952}
   leftProps:
   - {fileID: 8608216795166681412}
   - {fileID: 3471259024614117802}

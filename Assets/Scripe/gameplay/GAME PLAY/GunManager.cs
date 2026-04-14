@@ -53,6 +53,12 @@ public class GunManager : NetworkBehaviour
     public Transform bulletSpawnPoint;   // Điểm trên cao để đạn rơi xuống
     public Transform bulletTablePoint;   // Điểm tập kết trên bàn (có thể là một hàng ngang)
 
+    [Header("Eject Settings")]
+    public Transform bulletSpawnPointt; 
+    public float ejectForce = 6f;       // Lực văng ngang (ra khỏi súng)
+    public float upwardForce = 2.5f;    // Lực nảy lên trên một chút
+    public float spinForce = 15f;       // Lực làm viên đạn xoay tròn trên không
+
     [Header("Game Over UI")]
     public GameObject gameOverCanvas;
     public TextMeshProUGUI resultText;
@@ -71,7 +77,53 @@ public class GunManager : NetworkBehaviour
     private bool canSway = false; 
     private float breatheTimer; 
     private float _lastEjectTime;
+    private bool _pendingShootSelf;
+    private int _pendingDmg;
 
+    [Header("Player References")]
+    public List<PlayerActionController> allPlayers = new List<PlayerActionController>();
+
+    public void RegisterPlayer(PlayerActionController pc)
+    {
+        if (!allPlayers.Contains(pc))
+        {
+            allPlayers.Add(pc);
+            // Sắp xếp theo PlayerIndex để đảm bảo Index 0 luôn là bên trái, 1 là bên phải
+            allPlayers = allPlayers.OrderBy(p => p.PlayerIndex).ToList();
+        }
+    }
+
+[Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+public void RPC_EjectBulletVisual(bool isReal)
+{
+    // 1. Chọn đúng loại Prefab (Thật - Đỏ, Giả - Đen)
+    GameObject prefab = isReal ? realBulletPrefab : blankBulletPrefab;
+    
+    if (prefab != null && bulletSpawnPointt != null && bulletTablePoint != null)
+    {
+        // 2. Tạo viên đạn tại hông súng
+        GameObject shell = Instantiate(prefab, bulletSpawnPointt.position, bulletSpawnPointt.rotation);
+        shell.tag = "Bullet"; // Để ClearOldBullets có thể dọn dẹp nếu cần
+
+        // 3. Hiệu ứng VĂNG (Dùng DOTween DOJump để tạo hình vòng cung)
+        // Tính toán vị trí rơi ngẫu nhiên một chút quanh bulletTablePoint để đạn không chồng lên nhau
+        Vector3 randomOffset = new Vector3(Random.Range(-0.2f, 0.2f), 0, Random.Range(-0.2f, 0.2f));
+        Vector3 targetPos = bulletTablePoint.position + randomOffset;
+
+        float duration = 0.8f; // Thời gian bay
+
+        // Nhảy từ súng ra bàn
+        shell.transform.DOJump(targetPos, 1.5f, 1, duration).SetEase(Ease.OutQuad);
+
+        // Xoay tròn khi đang bay cho giống thật
+        shell.transform.DORotate(new Vector3(Random.Range(360, 720), Random.Range(360, 720), Random.Range(360, 720)), duration, RotateMode.FastBeyond360);
+
+        // 4. Hiệu ứng BIẾN MẤT (Mờ dần/Thu nhỏ sau 3 giây để tránh rác scene)
+        shell.transform.DOScale(Vector3.zero, 0.5f)
+            .SetDelay(duration + 3f)
+            .OnComplete(() => { if(shell != null) Destroy(shell); });
+    }
+}
 
     public void UnlockLocalAction()
     {
@@ -163,82 +215,102 @@ private IEnumerator AnimateBulletSequence(List<bool> bulletList)
             RPC_Shoot(shootSelf); 
         } 
     }
-
 [Rpc(RpcSources.All, RpcTargets.StateAuthority)] 
 public void RPC_Shoot(bool shootSelf) 
 { 
     if (bulletCount <= 0 || isWaitingNextRound || hasShotThisTurn || isAnimatingAction) return; 
     
-    // Tìm Player đang thực hiện lượt này
+    // Lưu tạm kết quả để đợi tí nữa Animation Event gọi mới áp dụng
+    _pendingShootSelf = shootSelf;
+    _pendingDmg = doubleDamage ? 2 : 1;
+    doubleDamage = false; 
+    hasShotThisTurn = true;
+
     var allPlayers = FindObjectsByType<PlayerActionController>(FindObjectsSortMode.None);
     var actingPlayer = allPlayers.FirstOrDefault(p => p.PlayerIndex == activePlayerIndex);
 
     if (actingPlayer != null)
     {
-        // GỌI Ở ĐÂY: Ra lệnh cho nhân vật bắt đầu diễn kịch bản nhặt súng và bắn
         actingPlayer.RPC_StartShootingSequence(shootSelf);
     }
+}
 
-    hasShotThisTurn = true; 
-    bool isReal = bullets[0]; 
-    bool isLast = (bulletCount == 1); 
-    
-    EjectBullet(); 
-    
-    int dmg = doubleDamage ? 2 : 1; 
-    doubleDamage = false; 
-    
-    bool shouldChangeTurn = true; 
+[Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+public void RPC_ApplyShootDamage()
+{
+    if (bulletCount <= 0) return;
 
-    if (isReal) 
-    { 
-        // --- LOGIC TÍNH SÁT THƯƠNG CHUẨN ---
-        if (activePlayerIndex == 0) // Lượt của Player 1 (Bên trái)
-        {
-            if (shootSelf) 
-                player1HP -= dmg; // P1 tự bắn mình -> P1 mất máu
-            else 
-                player2HP -= dmg; // P1 bắn đối thủ -> P2 mất máu
-        } 
-        else // Lượt của Player 2 (Bên phải)
-        {
-            if (shootSelf) 
-                player2HP -= dmg; // P2 tự bắn mình -> P2 mất máu
-            else 
-                player1HP -= dmg; // P2 bắn đối thủ -> P1 mất máu
+    bool isReal = bullets[0];
+    bool isLast = (bulletCount == 1);
+    
+    // --- 1. HIỆU ỨNG VĂNG ĐẠN (MỚI THÊM) ---
+    // Gọi RPC để tất cả các máy cùng thấy viên đạn văng ra từ hông súng
+    RPC_EjectBulletVisual(isReal); 
+
+    EjectBullet();
+
+    bool shouldChangeTurn = true;
+
+    if (isReal)
+    {
+        // Tính toán trừ máu (giữ nguyên logic cũ)
+        int damage = doubleDamage ? 2 : 1; 
+        if (activePlayerIndex == 0) {
+            if (_pendingShootSelf) player1HP -= damage;
+            else player2HP -= damage;
+        } else {
+            if (_pendingShootSelf) player2HP -= damage;
+            else player1HP -= damage;
         }
-        shouldChangeTurn = true; 
-    } 
-    else // Đạn giả (Blank)
-    {
-        // Nếu tự bắn mình bằng đạn giả thì được giữ lượt (không đổi turn)
-        shouldChangeTurn = !shootSelf; 
+
+        // --- 2. GỌI DIỄN CẢNH TÉ CÓ DELAY (SỬA LẠI) ---
+        if (allPlayers.Count >= 2)
+        {
+            // Thay vì gọi RPC_PlayFaint trực tiếp, ta dùng Coroutine để chờ súng nổ xong mới ngã
+            StartCoroutine(DelayFaintRPC(activePlayerIndex, _pendingShootSelf));
+        }
+        
+        shouldChangeTurn = true;
+        doubleDamage = false; 
     }
-    
-    // Đảm bảo máu không bao giờ xuống dưới 0
-    player1HP = Mathf.Max(0, player1HP); 
-    player2HP = Mathf.Max(0, player2HP); 
-
-    if (isLast && player1HP > 0 && player2HP > 0) 
+    else
     {
-        isWaitingNextRound = true; 
+        // Đạn giả: Tự bắn mình giữ lượt, bắn đối phương mất lượt
+        shouldChangeTurn = !_pendingShootSelf;
+        doubleDamage = false; 
     }
 
-    // Gửi dữ liệu máu đã cập nhật xuống các máy để diễn hiệu ứng
-    RPC_AnimateHealth(player1HP, player2HP, shouldChangeTurn, isLast); 
+    player1HP = Mathf.Max(0, player1HP);
+    player2HP = Mathf.Max(0, player2HP);
 
-    if (shouldChangeTurn) 
+    if (isLast && player1HP > 0 && player2HP > 0) isWaitingNextRound = true;
+
+    RPC_AnimateHealth(player1HP, player2HP, shouldChangeTurn, isLast);
+
+    if (shouldChangeTurn) ChangeTurn();
+    else {
+        hasShotThisTurn = false;
+        RPC_UnlockLocalForAll();
+    }
+    CheckGameOver();
+}
+
+// --- HÀM BỔ TRỢ DELAY NGÃ ---
+IEnumerator DelayFaintRPC(int activeIndex, bool isSelf)
+{
+    yield return new WaitForSeconds(0.7f); // Đợi 0.7 giây cho súng nổ xong
+
+    if (isSelf) 
     {
-        ChangeTurn(); 
+        allPlayers[activeIndex].RPC_PlayFaint(true); // Mình té
     }
     else 
     {
-        hasShotThisTurn = false; 
-        RPC_UnlockLocalForAll(); // Mở khóa cho phép bắn tiếp vì được giữ lượt
+        int enemyIndex = (activeIndex == 0) ? 1 : 0;
+        allPlayers[enemyIndex].RPC_PlayFaint(false); // Địch té
     }
-
-    CheckGameOver(); 
 }
+
     // Thêm hàm phụ này ngay dưới RPC_Shoot để hỗ trợ Invoke
     private void CallNextRoundRoutine() 
     {
@@ -309,7 +381,14 @@ public void ChangeTurn()
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     public void RPC_SyncVisuals()
     {
+        // Xoay súng về phía người chơi hiện tại
         RotateGunToActivePlayer();
+
+        // Ép cây súng trên bàn phải hiện ra
+        if (rotatingGun != null) 
+        {
+            rotatingGun.SetActive(true);
+        }
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
