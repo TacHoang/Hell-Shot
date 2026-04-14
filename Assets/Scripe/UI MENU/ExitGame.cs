@@ -5,8 +5,6 @@ using System.Collections;
 
 public class ExitGame : MonoBehaviour
 {
-    public NetworkRunner runner;
-
     public void QuitGame()
     {
         StartCoroutine(ExitRoutine());
@@ -14,13 +12,22 @@ public class ExitGame : MonoBehaviour
 
     IEnumerator ExitRoutine()
     {
-        yield return new WaitForSeconds(0.5f);
+        // 🔥 Tìm runner hiện tại
+        NetworkRunner runner = FindObjectOfType<NetworkRunner>();
 
         if (runner != null)
         {
-            runner.Shutdown(); // 🔥 QUAN TRỌNG
+            // 🔥 Shutdown đúng cách (QUAN TRỌNG NHẤT)
+            yield return runner.Shutdown();
+
+            // 🔥 XÓA LUÔN runner khỏi scene (reset sạch)
+            Destroy(runner.gameObject);
         }
 
+        // 🔥 Đợi 1 frame cho chắc
+        yield return null;
+
+        // 🔥 Load lại scene menu (trạng thái như mới mở game)
         SceneManager.LoadScene("menu");
     }
 }
