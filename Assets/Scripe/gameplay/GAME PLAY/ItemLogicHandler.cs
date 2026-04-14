@@ -37,24 +37,32 @@ public class ItemLogicHandler : NetworkBehaviour
     }
 
     // --- SỬA LẠI HÀM UseSoda ---
-    private void UseSoda() {
-        if (gunManager.bulletCount <= 0) return;
+private void UseSoda() {
+    if (!HasStateAuthority) return; // Chỉ Host chạy logic
 
-        Debug.Log($"<color=yellow>[Soda]</color> Loại bỏ viên: {(gunManager.bullets[0] ? "THẬT" : "GIẢ")}");
+    if (gunManager.bulletCount <= 0) return;
 
-        // Gọi hàm xử lý tập trung từ GunManager
-        gunManager.EjectBullet(); 
+    bool isReal = gunManager.bullets[0]; // Host lấy dữ liệu thật
 
-        if (gunManager.bulletCount == 0) {
-            gunManager.isWaitingNextRound = true;
-            gunManager.ChangeTurn(); 
-            
-            if (gunManager.player1HP > 0 && gunManager.player2HP > 0) {
-                gunManager.currentRound++;
-                gunManager.StartCoroutine(gunManager.NextRoundRoutine()); 
-            }
-        }
+    // Host bắn lệnh cho cả 2 máy cùng hiện đạn văng ra
+    gunManager.RPC_AnimateSodaEject(isReal);
+
+    // Host trừ đạn trong súng
+    gunManager.EjectBullet(); 
+
+    if (gunManager.bulletCount == 0) {
+        // Chuyển round sau khi văng xong
+        StartCoroutine(WaitThenNextRound());
     }
+}
+
+private IEnumerator WaitThenNextRound() {
+    yield return new WaitForSeconds(1.5f);
+    if (gunManager.player1HP > 0 && gunManager.player2HP > 0) {
+        gunManager.currentRound++;
+        gunManager.StartCoroutine(gunManager.NextRoundRoutine());
+    }
+}
 
     private void UsePill(PlayerRef user)
     {

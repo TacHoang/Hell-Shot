@@ -126,10 +126,28 @@ public class HealthBarController : MonoBehaviour
         yield return new WaitForSeconds(0.6f);
     }
 
-    public void UpdateHealthUI(int leftHP, int rightHP)
+    public void UpdateHealthUI(int p1HP, int p2HP)
     {
-        UpdateHeartList(myHearts, leftHP, true);
-        UpdateHeartList(enemyHearts, rightHP, false);
+        // 1. Xác định mình là ai (Host = 0, Client = 1)
+        // p1HP: Máu của Host, p2HP: Máu của Client
+        int localPlayerIndex = (FindFirstObjectByType<Fusion.NetworkRunner>().IsServer) ? 0 : 1;
+
+        if (localPlayerIndex == 0)
+        {
+            // --- NẾU LÀ HOST (P1) ---
+            // Thanh trái (myHearts) hiện máu mình (p1HP)
+            // Thanh phải (enemyHearts) hiện máu đối thủ (p2HP)
+            UpdateHeartList(myHearts, p1HP, true);
+            UpdateHeartList(enemyHearts, p2HP, false);
+        }
+        else
+        {
+            // --- NẾU LÀ CLIENT (P2) ---
+            // Thanh trái (myHearts) hiện máu mình (p2HP)
+            // Thanh phải (enemyHearts) hiện máu đối thủ (p1HP)
+            UpdateHeartList(myHearts, p2HP, true); 
+            UpdateHeartList(enemyHearts, p1HP, false);
+        }
     }
 
     private void UpdateHeartList(List<Image> hearts, int currentHP, bool isLeft)
