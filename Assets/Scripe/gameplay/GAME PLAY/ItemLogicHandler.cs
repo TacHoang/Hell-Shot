@@ -37,24 +37,26 @@ public class ItemLogicHandler : NetworkBehaviour
     }
 
     // --- SỬA LẠI HÀM UseSoda ---
-private void UseSoda() {
-    if (!HasStateAuthority) return; // Chỉ Host chạy logic
+    private void UseSoda() 
+    {
+        if (!HasStateAuthority) return; 
 
-    if (gunManager.bulletCount <= 0) return;
+        bool isReal = gunManager.GetCurrentBulletType();
+        
+        // 1. Host tự chạy hiệu ứng trên máy mình (Chỉ chạy 1 lần local)
+        gunManager.PlaySodaVisualLocal(isReal);
 
-    bool isReal = gunManager.bullets[0]; // Host lấy dữ liệu thật
+        // 2. Gửi RPC nhưng CHỈ cho máy đối thủ (Proxies). 
+        // Máy Host sẽ KHÔNG nhận lại cái này nên không bị văng viên thứ 2.
+        gunManager.RPC_AnimateSodaEject_Proxies(isReal); 
 
-    // Host bắn lệnh cho cả 2 máy cùng hiện đạn văng ra
-    gunManager.RPC_AnimateSodaEject(isReal);
+        // 3. Trừ dữ liệu đạn (Chỉ xử lý biến số, không sinh Prefab trong này)
+        gunManager.EjectBullet(); 
 
-    // Host trừ đạn trong súng
-    gunManager.EjectBullet(); 
-
-    if (gunManager.bulletCount == 0) {
-        // Chuyển round sau khi văng xong
-        StartCoroutine(WaitThenNextRound());
+        if (gunManager.bulletCount == 0) {
+            StartCoroutine(WaitThenNextRound());
+        }
     }
-}
 
 private IEnumerator WaitThenNextRound() {
     yield return new WaitForSeconds(1.5f);
@@ -66,8 +68,17 @@ private IEnumerator WaitThenNextRound() {
 
     private void UsePill(PlayerRef user)
     {
+        if (!HasStateAuthority) return; // CHỈ Host mới được tính toán
+
+        // Tính toán may rủi duy nhất 1 lần trên Host
         int chance = Random.Range(0, 2); 
-        ModifyHealth(user, (chance == 0) ? 1 : -1);
+        int amount = (chance == 0) ? 1 : -1;
+
+        // Thay đổi máu trực tiếp (Hàm này đã có check HasStateAuthority của ông rồi)
+        ModifyHealth(user, amount);
+        
+        // Nếu có hiệu ứng âm thanh/hình ảnh uống thuốc, gọi RPC Proxies ở đây
+        // gunManager.RPC_PlayPillEffect(user, amount); 
     }
 
     private void UseHealth(PlayerRef user) { ModifyHealth(user, 1); }
