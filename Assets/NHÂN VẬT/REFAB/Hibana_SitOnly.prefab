@@ -17344,7 +17344,7 @@ MonoBehaviour:
   realBulletSound: {fileID: 8300000, guid: 2d03bbf57e37d7b47817056366b41c7d, type: 3}
   blankBulletSound: {fileID: 8300000, guid: fd0cf4659bc26d7409309b29bdde3dbe, type: 3}
   glassSound: {fileID: 8300000, guid: 486836889d7ab8f4ea72506105f79f93, type: 3}
-  sawSound: {fileID: 8300000, guid: dd43c576e1a972948855da332cce37a1, type: 3}
+  sawSound: {fileID: 8300000, guid: 9593ae06ec2db904a96ae8e9688843b5, type: 3}
   cuffSound: {fileID: 8300000, guid: 952a0b596dc750f41b1faced89804eeb, type: 3}
   pillSound: {fileID: 8300000, guid: d4c917c6c707ece4db58c3e14e2ccd9d, type: 3}
   leftProps:
